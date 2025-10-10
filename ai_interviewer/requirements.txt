@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+langchain
+langgraph
+langchain-core
+langchain-community
+langchain-google-genai
+supabase
+gotrue
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
+redis==5.0.1
+pydantic==2.5.0
+python-dotenv==1.0.0
+textblob==0.17.1
+python-jose[cryptography]

@@ -91,7 +91,7 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
             ) : (
               <>
                 <Copy className="w-4 h-4 mr-1" />
-                Copy Link
+                Generate
               </>
             )}
           </button>

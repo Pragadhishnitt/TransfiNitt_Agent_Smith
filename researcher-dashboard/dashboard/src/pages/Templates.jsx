@@ -3,10 +3,12 @@ import { Plus, Search, Filter } from 'lucide-react';
 import TemplateCard from '../components/Templates/TemplateCard';
 import TemplateForm from '../components/Templates/TemplateForm';
 import { templatesAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
 
 const Templates = () => {
   console.log('📝 Templates component rendering...');
   
+  const { showSuccess, showError } = useToast();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -92,39 +94,81 @@ const Templates = () => {
   };
 
   const handleViewTemplate = (template) => {
-    // Navigate to template details or open modal
+    // This is now handled internally by TemplateCard
     console.log('View template:', template);
   };
 
   const handleSaveTemplate = async (templateData) => {
     try {
+      console.log('💾 Saving template:', templateData);
+      
       if (editingTemplate) {
         // Update existing template
+        console.log('🔄 Updating existing template:', editingTemplate.id);
         const response = await templatesAPI.update(editingTemplate.id, templateData);
+        console.log('✅ Update response:', response);
+        
         if (response.data.success) {
-          setTemplates(templates.map(t => 
-            t.id === editingTemplate.id ? response.data.template : t
-          ));
+          setTemplates(templates.map(t => {
+            if (t.id === editingTemplate.id) {
+              // Preserve existing values if not provided in update
+              return {
+                ...t,
+                ...response.data.template,
+                interview_count: response.data.template.interview_count ?? t.interview_count ?? 0,
+                starter_questions: response.data.template.starter_questions || t.starter_questions || [],
+                created_at: response.data.template.created_at || t.created_at || new Date().toISOString()
+              };
+            }
+            return t;
+          }));
+          console.log('✅ Template updated successfully');
+        } else {
+          console.error('❌ Update failed:', response.data.message);
+          throw new Error(response.data.message || 'Failed to update template');
         }
       } else {
         // Create new template
+        console.log('🆕 Creating new template');
         const response = await templatesAPI.create(templateData);
+        console.log('✅ Create response:', response);
+        
         if (response.data.success) {
-          setTemplates([response.data.template, ...templates]);
+          // Add default values for newly created template
+          const newTemplate = {
+            ...response.data.template,
+            interview_count: 0,
+            created_at: response.data.template.created_at || new Date().toISOString(),
+            starter_questions: response.data.template.starter_questions || [],
+          };
+          setTemplates([newTemplate, ...templates]);
+          console.log('✅ Template created successfully');
+        } else {
+          console.error('❌ Creation failed:', response.data.message);
+          throw new Error(response.data.message || 'Failed to create template');
         }
       }
+      
+      // Close form and reset state
       setShowForm(false);
       setEditingTemplate(null);
+      console.log('✅ Form closed successfully');
+      
+      // Show success message
+      showSuccess(editingTemplate ? 'Template updated successfully!' : 'Template created successfully!');
+      
     } catch (error) {
-      console.error('Error saving template:', error);
-      // For demo purposes, add to local state
-      const newTemplate = {
-        id: Date.now().toString(),
-        ...templateData,
-        created_at: new Date().toISOString(),
-        interview_count: 0
-      };
-      setTemplates([newTemplate, ...templates]);
+      console.error('❌ Error saving template:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      // Show error message
+      showError(`Error saving template: ${error.message || 'Unknown error occurred'}`);
+      
+      // Still close the form to prevent blank screen
       setShowForm(false);
       setEditingTemplate(null);
     }

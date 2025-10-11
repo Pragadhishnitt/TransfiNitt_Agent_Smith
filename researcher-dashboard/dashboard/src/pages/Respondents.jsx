@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, User, Mail, MapPin, Briefcase, Calendar, DollarSign, TrendingUp } from 'lucide-react';
 import { respondentsAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
 
 const Respondents = () => {
   console.log('👥 Respondents component rendering...');
   
+  const { showSuccess, showError } = useToast();
   const [respondents, setRespondents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,9 +98,24 @@ const Respondents = () => {
   const handleCreateRespondent = async (e) => {
     e.preventDefault();
     try {
+      console.log('💾 Creating respondent:', formData);
+      
       const response = await respondentsAPI.create(formData);
+      console.log('✅ Create response:', response);
+      
       if (response.data.success) {
-        setRespondents([response.data.respondent, ...respondents]);
+        // Add default values for newly created respondent
+        const newRespondent = {
+          ...response.data.respondent,
+          participation_count: 0,
+          total_incentives: 0,
+          avg_sentiment: 0,
+          behavior_tags: []
+        };
+        setRespondents([newRespondent, ...respondents]);
+        console.log('✅ Respondent created successfully');
+        
+        // Reset form and close modal
         setShowForm(false);
         setFormData({
           name: '',
@@ -109,19 +126,27 @@ const Respondents = () => {
             occupation: ''
           }
         });
+        console.log('✅ Form closed successfully');
+        
+        // Show success message
+        showSuccess('Respondent created successfully!');
+        
+      } else {
+        console.error('❌ Creation failed:', response.data.message);
+        throw new Error(response.data.message || 'Failed to create respondent');
       }
     } catch (error) {
-      console.error('Error creating respondent:', error);
-      // For demo purposes, add to local state
-      const newRespondent = {
-        id: Date.now().toString(),
-        ...formData,
-        participation_count: 0,
-        total_incentives: 0,
-        avg_sentiment: 0,
-        behavior_tags: []
-      };
-      setRespondents([newRespondent, ...respondents]);
+      console.error('❌ Error creating respondent:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      // Show error message
+      showError(`Error creating respondent: ${error.message || 'Unknown error occurred'}`);
+      
+      // Still close the form to prevent blank screen
       setShowForm(false);
       setFormData({
         name: '',
@@ -273,12 +298,14 @@ const Respondents = () => {
                   <p className="text-xs text-gray-500">Interviews</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-gray-900">${respondent.total_incentives.toFixed(2)}</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    ${(respondent.total_incentives || 0).toFixed(2)}
+                  </p>
                   <p className="text-xs text-gray-500">Earned</p>
                 </div>
                 <div className="text-center">
-                  <p className={`text-lg font-semibold ${getSentimentColor(respondent.avg_sentiment)}`}>
-                    {(respondent.avg_sentiment * 100).toFixed(0)}%
+                  <p className={`text-lg font-semibold ${getSentimentColor(respondent.avg_sentiment || 0)}`}>
+                    {((respondent.avg_sentiment || 0) * 100).toFixed(0)}%
                   </p>
                   <p className="text-xs text-gray-500">Sentiment</p>
                 </div>

@@ -109,91 +109,94 @@ const Insights = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Insights & Analytics</h1>
-          <p className="text-gray-600">Analyze your research data and trends</p>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <select
-            value={selectedTemplate}
-            onChange={(e) => setSelectedTemplate(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">All Templates</option>
-            {templates.map(template => (
-              <option key={template.id} value={template.id}>
-                {template.title}
-              </option>
-            ))}
-          </select>
+    <div className="p-6 space-y-8">
+      {/* Header */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold text-gray-900 mb-2">Insights & Analytics</h1>
+            <p className="text-gray-600 text-lg">Analyze your research data and trends</p>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <select
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+              className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+            >
+              <option value="">All Templates</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>
+                  {template.title}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <MessageSquare className="w-6 h-6 text-blue-600" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Total Interviews</p>
+              <p className="text-3xl font-bold text-gray-900">{overview?.total_interviews || 0}</p>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Interviews</p>
-              <p className="text-2xl font-bold text-gray-900">{overview?.total_interviews || 0}</p>
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <MessageSquare className="w-6 h-6 text-blue-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Avg Sentiment</p>
-              <p className="text-2xl font-bold text-gray-900">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Avg Sentiment</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {overview ? (overview.avg_sentiment * 100).toFixed(1) : 0}%
               </p>
             </div>
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-green-600" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Users className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Completion Rate</p>
-              <p className="text-2xl font-bold text-gray-900">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Completion Rate</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {overview ? (overview.completion_rate * 100).toFixed(1) : 0}%
               </p>
             </div>
+            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-purple-600" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Avg Duration</p>
-              <p className="text-2xl font-bold text-gray-900">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium">Avg Duration</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {overview ? formatDuration(overview.avg_duration_seconds) : '0m'}
               </p>
+            </div>
+            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+              <Clock className="w-6 h-6 text-orange-600" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sentiment Distribution */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Sentiment Distribution</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Sentiment Distribution</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -212,7 +215,7 @@ const Insights = () => {
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
-          <div className="flex justify-center space-x-6 mt-4">
+          <div className="flex justify-center space-x-6 mt-6">
             {sentimentData.map((item, index) => (
               <div key={index} className="flex items-center">
                 <div 
@@ -226,50 +229,58 @@ const Insights = () => {
         </div>
 
         {/* Top Themes */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Themes</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Top Themes</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={themesData}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis 
                 dataKey="theme" 
                 angle={-45}
                 textAnchor="end"
                 height={80}
                 fontSize={12}
+                stroke="#666"
               />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" fill="#3B82F6" />
+              <YAxis stroke="#666" />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Themes with Sentiment */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Themes Analysis</h3>
+      {/* Themes Analysis */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-6">Themes Analysis</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Theme
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Mentions
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Avg Sentiment
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Trend
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {themesData.map((theme, index) => (
-                <tr key={index}>
+                <tr key={index} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 capitalize">
                       {theme.theme.replace('_', ' ')}

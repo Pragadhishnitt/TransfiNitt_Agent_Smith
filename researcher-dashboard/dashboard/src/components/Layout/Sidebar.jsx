@@ -11,9 +11,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
+
 const Sidebar = () => {
   console.log('📱 Sidebar component rendering...');
-  const { logout } = useAuth();
+  const { user,logout } = useAuth();
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, gradient: 'from-blue-500 to-purple-600' },
@@ -63,11 +64,6 @@ const Sidebar = () => {
                 <Icon className="w-5 h-5" />
               </div>
               <span className="flex-1">{item.name}</span>
-              {item.name === 'Sessions' && (
-                <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full animate-pulse">
-                  3
-                </span>
-              )}
             </NavLink>
           );
         })}
@@ -81,7 +77,7 @@ const Sidebar = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-900">Researcher</p>
-            <p className="text-xs text-gray-500">researcher@example.com</p>
+            <p className="text-xs text-gray-500">{user?.email}</p>
           </div>
         </div>
         

@@ -28,10 +28,27 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.log('🔍 API Error Interceptor:', {
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method,
+      data: error.response?.data
+    });
+    
+    // Only redirect to login for 401 errors on auth-related endpoints
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      const isAuthEndpoint = error.config?.url?.includes('/auth/');
+      
+      if (isAuthEndpoint) {
+        console.log('🔐 Auth error - redirecting to login');
+        localStorage.removeItem('authToken');
+        window.location.href = '/login';
+      } else {
+        console.log('🔐 Non-auth 401 error - not redirecting');
+        // Don't redirect for non-auth 401 errors, just log them
+      }
     }
+    
     return Promise.reject(error);
   }
 );
@@ -49,6 +66,8 @@ export const templatesAPI = {
   create: (templateData) => api.post('/templates', templateData),
   update: (id, templateData) => api.put(`/templates/${id}`, templateData),
   delete: (id) => api.delete(`/templates/${id}`),
+  getSessions: (id) => api.get(`/templates/${id}/sessions`),
+  getAvailableRespondents: (id) => api.get(`/templates/${id}/available-respondents`),
 };
 
 // Sessions API

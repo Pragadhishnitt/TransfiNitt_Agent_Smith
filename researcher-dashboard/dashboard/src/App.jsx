@@ -1,5 +1,6 @@
   import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
   import { AuthProvider, useAuth } from './contexts/AuthContext';
+  import { ToastProvider } from './contexts/ToastContext';
   import Layout from './components/Layout/Layout';
   import ProtectedRoute from './components/Auth/ProtectedRoute';
   import Login from './components/Auth/Login';
@@ -60,7 +61,9 @@
   function App() {
     return (
       <AuthProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </AuthProvider>
     );
   }

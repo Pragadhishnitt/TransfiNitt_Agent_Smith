@@ -1,20 +1,22 @@
 const API_BASE_URL = 'http://localhost:8000/api';
-import { dummyResponses } from '../utils/dummyData';
+
+console.log('API Service initialized - using real API only');
 
 export const interviewAPI = {
   // Get interview details
   getInterviewDetails: async (sessionId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/interviews/${sessionId}`);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch interview details');
+        throw new Error(`Failed to fetch interview details: ${response.status}`);
       }
-      return response.json();
+      
+      console.log('✅ Fetched real API interview details');
+      return await response.json();
     } catch (error) {
-      console.warn('Using fallback interview details:', error);
-      // Reset the interview state when getting details
-      dummyResponses.resetInterview();
-      return dummyResponses.interviewDetails;
+      console.error('❌ API request failed:', error.message);
+      throw error;
     }
   },
 
@@ -28,13 +30,18 @@ export const interviewAPI = {
         },
         body: JSON.stringify(data),
       });
+      
       if (!response.ok) {
-        throw new Error('Failed to start interview');
+        throw new Error(`Failed to start interview: ${response.status}`);
       }
-      return response.json();
+      
+      console.log('✅ Started interview via real API');
+      const result = await response.json();
+      console.log('Start interview result:', result);
+      return result;
     } catch (error) {
-      console.warn('Using fallback start interview response:', error);
-      return dummyResponses.startInterview;
+      console.error('❌ API request failed:', error.message);
+      throw error;
     }
   },
 
@@ -52,13 +59,48 @@ export const interviewAPI = {
           timestamp: new Date().toISOString(),
         }),
       });
+      
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        throw new Error(`Failed to send message: ${response.status}`);
       }
-      return response.json();
+      
+      console.log('✅ Sent message via real API');
+      const result = await response.json();
+      
+      // Transform response to expected format
+      return transformApiResponse(result);
     } catch (error) {
-      console.warn('Using fallback message response:', error);
-      return dummyResponses.getNextQuestion(message);
+      console.error('❌ API request failed:', error.message);
+      throw error;
     }
   },
 };
+
+// Helper function to transform API response to expected format
+function transformApiResponse(apiResponse) {
+  console.log('Transforming API response:', apiResponse);
+  
+  if (apiResponse.is_complete || apiResponse.interview_complete) {
+    return {
+      success: true,
+      is_complete: true,
+      interview_complete: true,
+      summary: apiResponse.summary || apiResponse.completion_message,
+      completion_message: apiResponse.completion_message || apiResponse.summary,
+      incentive: apiResponse.incentive,
+      completion_time: apiResponse.completion_time,
+      duration_minutes: apiResponse.duration_minutes,
+      total_questions: apiResponse.total_questions,
+    };
+  } else {
+    return {
+      success: true,
+      is_complete: false,
+      interview_complete: false,
+      next_question: apiResponse.next_question || apiResponse.response?.text,
+      question_id: apiResponse.question_id || apiResponse.response?.question_id,
+      progress: apiResponse.progress,
+      is_probe: apiResponse.is_probe,
+    };
+  }
+}

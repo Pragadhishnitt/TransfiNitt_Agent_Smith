@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import ChatInterface from './components/ChatInterface';
@@ -19,7 +18,7 @@ function App() {
     const id = pathParts[pathParts.length - 1];
     
     // Use dummy session if no valid ID in URL
-    const defaultSessionId = '53e791ab-be8d-4842-914e-95f1b8a289a8';
+    const defaultSessionId = '431440cf-59f6-49ac-a956-60dac8fe23b5';
     const validId = id && id !== '' ? id : defaultSessionId;
     
     setSessionId(validId);

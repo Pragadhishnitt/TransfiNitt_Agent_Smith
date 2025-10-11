@@ -38,6 +38,7 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
         const detailedRespondents = await Promise.all(
           respondentIds.map(async (respondent) => {
             try {
+              
               const detailResponse = await respondentsAPI.getById(respondent.id);
               if (detailResponse.data.success) {
                 return {
@@ -138,44 +139,50 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
   };
 
   const handleSendLink = async (respondent) => {
-    try {
-      setSendingLinks(prev => new Set(prev).add(respondent.id));
+  try {
+    setSendingLinks(prev => new Set(prev).add(respondent.id));
 
-      const response = await sessionsAPI.create({
-        template_id: templateId,
-        respondent_name: respondent.name || respondent.email.split('@')[0],
-        respondent_email: respondent.email
-      });
+    const response = await sessionsAPI.create({
+      template_id: templateId,
+      respondent_name: respondent.name || respondent.email.split('@')[0],
+      respondent_email: respondent.email,
+      send_email: true // This triggers email sending
+    });
 
-      if (response.data.success) {
-        const { interview_link } = response.data;
-        
-        // Copy link to clipboard
-        await navigator.clipboard.writeText(interview_link);
-        
-        // Mark as sent
-        setSentLinks(prev => new Set(prev).add(respondent.id));
-        
-        // Remove from available list after a short delay
-        setTimeout(() => {
-          setAvailableRespondents(prev => 
-            prev.filter(r => r.id !== respondent.id)
-          );
-        }, 2000);
-      } else {
-        setError(response.data.message || 'Failed to create session');
+    if (response.data.success) {
+      const { interview_link, email_sent } = response.data;
+      
+      // Copy link to clipboard
+      await navigator.clipboard.writeText(interview_link);
+      
+      // Mark as sent
+      setSentLinks(prev => new Set(prev).add(respondent.id));
+      
+      // Log email status
+      if (email_sent) {
+        console.log(`✅ Email sent to ${respondent.email}`);
       }
-    } catch (error) {
-      console.error('Error sending link:', error);
-      setError('Failed to send link. Please try again.');
-    } finally {
-      setSendingLinks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(respondent.id);
-        return newSet;
-      });
+      
+      // Remove from available list after a short delay
+      setTimeout(() => {
+        setAvailableRespondents(prev => 
+          prev.filter(r => r.id !== respondent.id)
+        );
+      }, 2000);
+    } else {
+      setError(response.data.message || 'Failed to create session');
     }
-  };
+  } catch (error) {
+    console.error('Error sending link:', error);
+    setError('Failed to send link. Please try again.');
+  } finally {
+    setSendingLinks(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(respondent.id);
+      return newSet;
+    });
+  }
+};
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {

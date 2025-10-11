@@ -16,7 +16,6 @@ ecdsa==0.19.1
 fastapi==0.118.3
 filetype==1.2.0
 frozenlist==1.8.0
-google-ai-generativelanguage==0.7.0
 google-api-core==2.26.0
 google-api-python-client==2.184.0
 google-auth==2.41.1
@@ -42,7 +41,6 @@ jsonpointer==3.0.0
 langchain==0.3.27
 langchain-community==0.3.31
 langchain-core==0.3.79
-langchain-google-genai==2.1.12
 langchain-text-splitters==0.3.11
 langgraph==0.6.10
 langgraph-checkpoint==2.1.2
@@ -104,3 +102,5 @@ wheel==0.45.1
 xxhash==3.6.0
 yarl==1.22.0
 zstandard==0.25.0
+langchain-cerebras
+langchain-groq

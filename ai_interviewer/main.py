@@ -1,12 +1,225 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import json
 import redis
 from groq import Groq
 import config
+
+# ========================================================================
+# EARLY TERMINATION DETECTOR
+# ========================================================================
+class EarlyTerminationDetector:
+    """Detects signals that user wants to end the interview"""
+    
+    EXIT_PHRASES = [
+        "end this", "end here", "end now", "just end", "lets end", "let's end",
+        "stop this", "stop here", "stop now", "finish this", "finish here",
+        "conclude", "wrap up", "wrap this up", "stop the interview", 
+        "end the interview", "quit the interview", "exit the interview",
+        "i want to stop", "i'd like to stop", "i want to end",
+        "can we stop", "can we end", "i'm done", "i am done", "im done",
+        "that's all", "thats all", "that is all", "no more questions", "no more",
+        "i don't want to continue", "i dont want to continue",
+        "don't want to continue", "dont want to continue", "not continuing",
+        "this is taking too long", "too long", "taking forever", "no time",
+        "don't have time", "dont have time", "i'm tired of this", 
+        "im tired of this", "tired of this", "fed up", "enough",
+        "that's enough", "thats enough",
+    ]
+    
+    NEGATIVE_EMOTION_PHRASES = [
+        "not feeling good", "feeling bad", "feeling uncomfortable",
+        "this is uncomfortable", "i'm not comfortable", "im not comfortable",
+        "not comfortable", "i feel bad", "i'm feeling bad", "not enjoying this",
+        "this is annoying", "this is frustrating", "i'm frustrated",
+        "im frustrated", "frustrated", "i don't like this", "i dont like this",
+        "dont like this", "this is boring", "i'm bored", "im bored", "bored",
+        "waste of time", "wasting my time", "not interested",
+    ]
+    
+    STRONG_NEGATIVE_WORDS = [
+        "hate", "awful", "terrible", "horrible", "worst",
+        "annoyed", "angry", "upset", "stressed", "anxious"
+    ]
+    
+    DISMISSIVE_RESPONSES = [
+        "yeah", "yea", "yep", "ok", "okay", "fine", "whatever",
+        "sure", "meh", "nah", "nope"
+    ]
+    
+    def check_exit_intent(self, text: str) -> Tuple[bool, str]:
+        """Check if user wants to exit the interview."""
+        text_lower = text.lower().strip()
+        
+        # Check for explicit exit phrases
+        for phrase in self.EXIT_PHRASES:
+            if phrase in text_lower:
+                return True, f"explicit_exit: '{phrase}'"
+        
+        # Check for "no" + exit words together
+        if "no" in text_lower:
+            exit_words = ["end", "stop", "finish", "quit", "done", "conclude", "wrap"]
+            for word in exit_words:
+                if word in text_lower:
+                    return True, f"negative_exit: 'no + {word}'"
+        
+        # Check for negative emotions
+        for phrase in self.NEGATIVE_EMOTION_PHRASES:
+            if phrase in text_lower:
+                return True, f"negative_emotion: '{phrase}'"
+        
+        # Check for strong negative sentiment
+        word_count = 0
+        words = text_lower.split()
+        for word in self.STRONG_NEGATIVE_WORDS:
+            if word in words:
+                word_count += 1
+        
+        if word_count >= 2:
+            return True, f"strong_negative_sentiment: {word_count} negative words"
+        
+        return False, ""
+    
+    def is_very_short_negative(self, text: str, sentiment: str) -> bool:
+        """Check if response is very short AND negative"""
+        word_count = len(text.split())
+        return word_count <= 2 and sentiment == "negative"
+    
+    def is_repeated_dismissive(
+        self, 
+        text: str, 
+        conversation_history: List[Dict], 
+        threshold: int = 2
+    ) -> bool:
+        """Check if user has given multiple dismissive responses in a row."""
+        text_lower = text.lower().strip()
+        
+        # Check if current response is dismissive
+        current_is_dismissive = (
+            any(d in text_lower for d in self.DISMISSIVE_RESPONSES) or 
+            len(text.split()) <= 2
+        )
+        
+        if not current_is_dismissive:
+            return False
+        
+        # Count recent consecutive dismissive responses
+        dismissive_count = 1  # Current response
+        
+        # Look at last few user responses
+        user_responses = [
+            msg["message"] for msg in reversed(conversation_history)
+            if msg.get("role") == "user"
+        ][1:5]  # Skip current (already counted), check last 4
+        
+        for response in user_responses:
+            response_lower = response.lower().strip()
+            is_dismissive = (
+                any(d in response_lower for d in self.DISMISSIVE_RESPONSES) or
+                len(response.split()) <= 2
+            )
+            
+            if is_dismissive:
+                dismissive_count += 1
+            else:
+                break  # Stop at first non-dismissive
+        
+        return dismissive_count >= threshold
+    
+    def should_terminate(
+        self, 
+        text: str, 
+        sentiment: str,
+        conversation_history: List[Dict],
+        consecutive_probes: int = 0,
+        max_probes: int = 2
+    ) -> Tuple[bool, str]:
+        """
+        COMPREHENSIVE termination check that considers multiple signals.
+        Returns: (should_terminate, reason)
+        
+        Args:
+            text: Current user response
+            sentiment: Sentiment of response (positive/negative/neutral)
+            conversation_history: Full conversation history
+            consecutive_probes: Number of consecutive probe questions asked
+            max_probes: Maximum allowed consecutive probes (default: 2)
+        """
+        # Check 1: Explicit exit intent (highest priority)
+        should_exit, reason = self.check_exit_intent(text)
+        if should_exit:
+            return True, reason
+        
+        # Check 2: MAX CONSECUTIVE PROBES REACHED (CRITICAL CHECK)
+        if consecutive_probes >= max_probes:
+            return True, f"probe_limit_reached: {consecutive_probes} consecutive probes without substantial response"
+        
+        # Check 3: Very short + negative (strong signal)
+        if self.is_very_short_negative(text, sentiment):
+            return True, "disengagement: very short negative response"
+        
+        # Check 4: Repeated dismissive responses
+        if self.is_repeated_dismissive(text, conversation_history, threshold=2):
+            return True, "disengagement: repeated dismissive responses"
+        
+        # Check 5: Probe fatigue (many probes + still short/vague)
+        if consecutive_probes >= 1 and len(text.split()) <= 3:
+            return True, f"probe_fatigue: {consecutive_probes} probes with continued minimal responses"
+        
+        return False, ""
+
+# Initialize detector
+early_termination_detector = EarlyTerminationDetector()
+
+# ========================================================================
+# TOPIC DEVIATION DETECTOR
+# ========================================================================
+class TopicDeviationDetector:
+    """Detects when user changes the topic"""
+    
+    def detect_deviation(self, original_question: str, user_response: str, groq_client) -> Tuple[bool, str]:
+        """
+        Uses Groq to detect if user's response is relevant to the question.
+        Returns: (is_deviated, deviation_type)
+        """
+        prompt = f"""You are analyzing if a user's response is relevant to the question asked.
+
+Question: {original_question}
+User Response: {user_response}
+
+Analyze if the user's response directly addresses the question or if they've changed the topic.
+
+Respond with ONLY ONE WORD:
+- "RELEVANT" if they answered the question (even briefly)
+- "TANGENT" if they went on a related but different tangent
+- "COMPLETELY_OFF" if they completely changed the topic
+
+Response:"""
+
+        try:
+            response = groq_client.chat.completions.create(
+                model=config.GROQ_FAST_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10,
+                temperature=0.1
+            )
+            result = response.choices[0].message.content.strip().upper()
+            
+            if "TANGENT" in result:
+                return True, "tangent"
+            elif "COMPLETELY_OFF" in result or "OFF" in result:
+                return True, "completely_off"
+            else:
+                return False, "relevant"
+        except Exception as e:
+            print(f"Deviation detection error: {e}")
+            return False, "relevant"
+
+# Initialize deviation detector
+deviation_detector = TopicDeviationDetector()
 
 # ========================================================================
 # REDIS CLIENT SETUP
@@ -29,7 +242,7 @@ groq_client = Groq(api_key=config.GROQ_API_KEY)
 # ========================================================================
 app = FastAPI(
     title="AI Interview Agent Service",
-    description="Simple interview agent that receives template data from backend",
+    description="Interview agent with early termination detection",
     version="1.0.0"
 )
 
@@ -40,6 +253,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ========================================================================
+# CONFIGURATION
+# ========================================================================
+MAX_CONSECUTIVE_PROBES = 2  # Terminate after 2 consecutive probes
 
 # ========================================================================
 # REQUEST/RESPONSE MODELS
@@ -70,6 +288,8 @@ class ChatResponse(BaseModel):
     sentiment: str = "neutral"
     progress: ProgressInfo
     is_complete: bool = False
+    terminated_early: bool = False
+    termination_reason: Optional[str] = None
 
 class EndRequest(BaseModel):
     session_id: str
@@ -86,6 +306,8 @@ class EndResponse(BaseModel):
     sentiment_score: float
     key_themes: List[str]
     total_duration_seconds: int
+    terminated_early: bool = False
+    termination_reason: Optional[str] = None
 
 class HealthResponse(BaseModel):
     status: str
@@ -98,8 +320,8 @@ class HealthResponse(BaseModel):
 
 def analyze_sentiment(text: str) -> str:
     """Simple sentiment analysis"""
-    positive_words = ["good", "great", "excellent", "love", "enjoy", "amazing", "wonderful", "fantastic"]
-    negative_words = ["bad", "terrible", "hate", "awful", "disappointed", "frustrated", "angry"]
+    positive_words = ["good", "great", "excellent", "love", "enjoy", "amazing", "wonderful", "fantastic", "happy", "excited"]
+    negative_words = ["bad", "terrible", "hate", "awful", "disappointed", "frustrated", "angry", "annoyed", "upset"]
     
     text_lower = text.lower()
     positive_count = sum(1 for word in positive_words if word in text_lower)
@@ -114,49 +336,178 @@ def analyze_sentiment(text: str) -> str:
 
 def is_vague_response(text: str) -> bool:
     """Check if response is vague and needs probing"""
-    vague_words = ["okay", "fine", "sometimes", "maybe", "not sure", "i guess", "probably", "kinda", "sort of"]
+    word_count = len(text.split())
+    vague_words = ["okay", "fine", "sometimes", "maybe", "not sure", "i guess", "probably", "kinda", "sort of", "idk", "dunno"]
+    
+    # Very short responses are vague
+    if word_count <= 3:
+        return True
+    
+    # Check for vague words
     return any(word in text.lower() for word in vague_words)
 
-def generate_question_with_groq(conversation_history: List[Dict], is_probe: bool = False) -> str:
-    """Generate next question using Groq"""
-    system_prompt = """You are a friendly market researcher conducting an interview.
-    Guidelines:
-    - Ask open-ended questions
-    - Be conversational and warm
-    - If the user gave a vague answer, ask them to elaborate with a specific example
-    - Keep questions concise (1-2 sentences)
-    - Ask follow-up questions based on their responses
-    """
+def generate_probe_question(conversation_history: List[Dict], original_question: str, deviation_type: Optional[str] = None) -> str:
+    """Generate a probe question that redirects to the original topic"""
     
-    if is_probe:
-        system_prompt += "\nThe user gave a vague answer. Ask them to elaborate with a specific example."
+    # Get the last user response
+    last_user_response = ""
+    for msg in reversed(conversation_history):
+        if msg["role"] == "user":
+            last_user_response = msg["message"]
+            break
+    
+    if deviation_type == "tangent":
+        system_prompt = f"""You are a friendly but FIRM market researcher. The user went on a tangent.
+
+ORIGINAL QUESTION: {original_question}
+USER'S TANGENT: {last_user_response}
+
+Your job: Gently acknowledge their tangent, then FIRMLY redirect back to the original question.
+
+RULES:
+1. Start with: "That's interesting about [their tangent topic]..."
+2. Then say: "But let's get back to what I asked about..."
+3. Rephrase the ORIGINAL question with specific examples
+4. Be warm but assertive - don't let them avoid the question
+5. Add emotion: "I'm really curious to understand..." or "I'd love to hear more specifically about..."
+
+Generate your response:"""
+    
+    elif deviation_type == "completely_off":
+        system_prompt = f"""You are a friendly but FIRM market researcher. The user COMPLETELY changed the topic.
+
+ORIGINAL QUESTION: {original_question}
+USER'S OFF-TOPIC RESPONSE: {last_user_response}
+
+Your job: Politely but FIRMLY bring them back to the original question.
+
+RULES:
+1. Say: "Haha, I appreciate that, but we're getting off track!"
+2. Then: "Let me bring us back to the original question..."
+3. Rephrase the ORIGINAL question with MORE specific guidance
+4. Be friendly but don't let them escape
+5. Add emotion: "I'm genuinely curious..." or "I really want to understand..."
+
+Generate your response:"""
+    
+    else:
+        # Standard vague response probe
+        system_prompt = f"""You are a friendly market researcher. The user gave a VAGUE answer.
+
+ORIGINAL QUESTION: {original_question}
+USER'S VAGUE ANSWER: {last_user_response}
+
+Your job: Get them to elaborate with SPECIFIC EXAMPLES.
+
+RULES:
+1. Acknowledge what they said briefly
+2. Ask for a SPECIFIC example or detail
+3. Use phrases like: "Can you walk me through a specific time when..." or "Give me a concrete example of..."
+4. Be warm and encouraging
+5. Keep it 1-2 sentences MAX
+6. Show genuine interest with emotion: "I'm really curious..." or "I'd love to hear more about..."
+
+Generate your probe question:"""
     
     messages = [{"role": "system", "content": system_prompt}]
-    
-    # Add conversation history
-    for msg in conversation_history[-10:]:  # Last 10 messages for context
-        role = "assistant" if msg["role"] == "agent" else "user"
-        messages.append({"role": role, "content": msg["message"]})
     
     try:
         response = groq_client.chat.completions.create(
             model=config.GROQ_FAST_MODEL,
             messages=messages,
-            max_tokens=80,
-            temperature=0.3
+            max_tokens=100,
+            temperature=0.4
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Groq probe error: {e}")
+        # Fallback based on deviation type
+        if deviation_type == "tangent":
+            return f"That's interesting, but let's get back to my original question: {original_question}"
+        elif deviation_type == "completely_off":
+            return f"Haha, we're getting off track! Let me bring us back: {original_question}"
+        else:
+            return "Could you give me a specific example of what you mean?"
+
+def generate_question_with_groq(conversation_history: List[Dict], research_topic: str) -> str:
+    """Generate next main question using Groq with emotion and strong prompts"""
+    
+    # Extract what's been discussed
+    discussed_topics = []
+    for msg in conversation_history:
+        if msg["role"] == "agent" and not msg.get("is_probe", False):
+            discussed_topics.append(msg["message"])
+    
+    context = "\n".join([f"- {topic}" for topic in discussed_topics[-3:]])  # Last 3 main questions
+    
+    system_prompt = f"""You are an ENGAGING and CURIOUS market researcher conducting an interview about: {research_topic}
+
+What you've already asked:
+{context}
+
+Your job: Generate the NEXT natural follow-up question.
+
+CRITICAL RULES:
+1. STAY ON TOPIC - Only ask about {research_topic}
+2. If the user mentioned something interesting in their last response, dig deeper into THAT
+3. Ask open-ended questions (who, what, when, where, why, how)
+4. Be conversational and WARM - show genuine curiosity
+5. Keep questions SHORT (1-2 sentences MAX)
+6. Add emotional engagement: 
+   - "I'm curious..."
+   - "I'd love to understand..."
+   - "That's fascinating! Tell me more about..."
+   - "I'm really interested in..."
+7. Ask for SPECIFICS - examples, stories, concrete details
+8. Build on what they said - create natural conversation flow
+9. NEVER ask generic questions - be specific to their responses
+
+Examples of GOOD questions:
+- "That's interesting! Can you walk me through a specific example of when that happened?"
+- "I'm curious - what made you choose that approach over others?"
+- "Tell me more about how that makes you feel in your daily routine?"
+
+Examples of BAD questions (NEVER use these):
+- "How do you feel about that?" (too vague)
+- "Can you tell me more?" (lazy)
+- "What else?" (unengaging)
+
+Generate ONE natural, engaging follow-up question:"""
+    
+    # Get recent conversation for context
+    recent_messages = []
+    for msg in conversation_history[-6:]:
+        role = "assistant" if msg["role"] == "agent" else "user"
+        recent_messages.append({"role": role, "content": msg["message"]})
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(recent_messages)
+    
+    try:
+        response = groq_client.chat.completions.create(
+            model=config.GROQ_FAST_MODEL,
+            messages=messages,
+            max_tokens=100,
+            temperature=0.5
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"Groq error: {e}")
-        return "Could you tell me more about that?"
+        return "Could you tell me more about that experience?"
 
-def generate_summary_with_groq(conversation_history: List[Dict]) -> tuple[str, List[str]]:
+def generate_summary_with_groq(conversation_history: List[Dict], terminated_early: bool = False) -> Tuple[str, List[str]]:
     """Generate summary and key themes using Groq"""
     user_responses = " ".join([msg["message"] for msg in conversation_history if msg["role"] == "user"])
     
-    summary_prompt = f"""Summarize this interview in 2-3 sentences:
-    {user_responses}
-    """
+    if terminated_early:
+        summary_prompt = f"""This interview was terminated early by the user. 
+        Summarize what was discussed in 2-3 sentences:
+        {user_responses}
+        """
+    else:
+        summary_prompt = f"""Summarize this interview in 2-3 sentences:
+        {user_responses}
+        """
     
     themes_prompt = f"""Extract 3-5 key themes from this interview:
     {user_responses}
@@ -195,6 +546,19 @@ def generate_summary_with_groq(conversation_history: List[Dict]) -> tuple[str, L
     except Exception as e:
         print(f"Summary generation error: {e}")
         return "Interview completed successfully.", ["general feedback", "user experience"]
+
+def get_original_question(conversation_history: List[Dict]) -> str:
+    """Get the last main (non-probe) question asked"""
+    for msg in reversed(conversation_history):
+        if msg["role"] == "agent" and not msg.get("is_probe", False):
+            return msg["message"]
+    
+    # Fallback to last agent message
+    for msg in reversed(conversation_history):
+        if msg["role"] == "agent":
+            return msg["message"]
+    
+    return "the topic we're discussing"
 
 # ========================================================================
 # ENDPOINTS
@@ -237,7 +601,10 @@ async def start_interview(request: StartRequest):
             "current_question": 1,
             "total_questions": 15,
             "started_at": datetime.now().isoformat(),
-            "template_id": request.template_id
+            "template_id": request.template_id,
+            "research_topic": request.starter_questions[0] if request.starter_questions else "your experiences",
+            "probe_count": 0,
+            "consecutive_probes": 0
         }
         redis_client.set(
             f"session:{session_id}:metadata",
@@ -245,20 +612,25 @@ async def start_interview(request: StartRequest):
             ex=86400
         )
         
-        # 3. Create first question
-        first_question = f"Hi! Let's talk about your habits. {request.starter_questions[0]}"
+        # 3. Create first question with emotion
+        topic = request.starter_questions[0] if request.starter_questions else "your daily habits"
+        first_question = f"Hi! I'm really excited to learn about your experiences. {topic}"
         
         # 4. Save first message to conversation
         conversation.append({
             "role": "agent",
             "message": first_question,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "is_probe": False
         })
         
         redis_client.set(
             f"session:{session_id}:conversation",
             json.dumps(conversation)
         )
+        
+        print(f"✅ Interview started: {session_id}")
+        print(f"   Topic: {metadata['research_topic']}")
         
         return StartResponse(
             success=True,
@@ -272,10 +644,13 @@ async def start_interview(request: StartRequest):
 
 @app.post("/agent/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """Main interview chat endpoint."""
+    """Main interview chat endpoint with early termination detection."""
     try:
         session_id = request.session_id
         user_message = request.message
+        
+        print(f"\n{'='*60}")
+        print(f"💬 USER: {user_message[:100]}...")
         
         # 1. Retrieve conversation history from Redis
         conversation_json = redis_client.get(f"session:{session_id}:conversation")
@@ -289,6 +664,7 @@ async def chat(request: ChatRequest):
             raise HTTPException(status_code=404, detail="Session metadata not found")
         
         metadata = json.loads(metadata_json)
+        research_topic = metadata.get('research_topic', 'your experiences')
         
         # 2. Add user's message to conversation
         conversation.append({
@@ -297,29 +673,132 @@ async def chat(request: ChatRequest):
             "timestamp": datetime.now().isoformat()
         })
         
-        # 3. Analyze sentiment and check if probing is needed
+        # 3. Analyze sentiment
         sentiment = analyze_sentiment(user_message)
+        print(f"📊 Sentiment: {sentiment}")
+        
+        # 4. Get current consecutive probe count
+        consecutive_probes = metadata.get('consecutive_probes', 0)
+        
+        # 5. CHECK FOR EARLY TERMINATION (BEFORE generating next question)
+        should_terminate, termination_reason = early_termination_detector.should_terminate(
+            user_message,
+            sentiment,
+            conversation,
+            consecutive_probes,
+            max_probes=MAX_CONSECUTIVE_PROBES
+        )
+        
+        if should_terminate:
+            print(f"🛑 EARLY TERMINATION DETECTED: {termination_reason}")
+            print(f"   Consecutive probes: {consecutive_probes}/{MAX_CONSECUTIVE_PROBES}")
+            print(f"{'='*60}\n")
+            
+            # Save termination info to metadata
+            metadata['terminated_early'] = True
+            metadata['termination_reason'] = termination_reason
+            metadata['terminated_at'] = datetime.now().isoformat()
+            
+            # Save conversation and metadata
+            redis_client.set(
+                f"session:{session_id}:conversation",
+                json.dumps(conversation),
+                ex=86400
+            )
+            
+            redis_client.set(
+                f"session:{session_id}:metadata",
+                json.dumps(metadata),
+                ex=86400
+            )
+            
+            return ChatResponse(
+                success=True,
+                next_question=None,
+                is_probe=False,
+                sentiment=sentiment,
+                progress=ProgressInfo(
+                    current=metadata['current_question'],
+                    total=metadata['total_questions']
+                ),
+                is_complete=True,
+                terminated_early=True,
+                termination_reason=termination_reason
+            )
+        
+        # 6. Check if response is vague
         is_vague = is_vague_response(user_message)
+        if is_vague:
+            print(f"⚠️  VAGUE RESPONSE DETECTED (word count: {len(user_message.split())})")
         
-        # 4. Generate next question
-        next_question = generate_question_with_groq(conversation, is_vague)
+        # 7. Check for topic deviation (ALWAYS check, regardless of vagueness)
+        original_question = get_original_question(conversation[:-1])  # Exclude current user message
+        is_deviated = False
+        deviation_type = None
         
-        # 5. Add AI's question to conversation
+        # Check deviation for ALL responses
+        is_deviated, deviation_type = deviation_detector.detect_deviation(
+            original_question, 
+            user_message, 
+            groq_client
+        )
+        
+        if is_deviated:
+            print(f"🔄 TOPIC DEVIATION DETECTED: {deviation_type}")
+            print(f"   Original Q: {original_question[:60]}...")
+            print(f"   User changed to: {user_message[:60]}...")
+        
+        # 8. Determine if we need to probe (vague OR deviated)
+        needs_probe = is_vague or is_deviated
+        
+        # 9. Generate next question
+        if needs_probe:
+            print(f"🔍 PROBE AGENT CALLED")
+            if is_vague:
+                print(f"   Reason: Vague response")
+            if is_deviated:
+                print(f"   Reason: Topic deviation ({deviation_type})")
+            
+            next_question = generate_probe_question(
+                conversation, 
+                original_question,
+                deviation_type if is_deviated else None
+            )
+            is_probe_flag = True
+            
+        else:
+            print(f"✅ GOOD RESPONSE - Generating next main question")
+            next_question = generate_question_with_groq(conversation, research_topic)
+            is_probe_flag = False
+        
+        print(f"🤖 AGENT: {next_question[:100]}...")
+        
+        # 10. Add AI's question to conversation
         conversation.append({
             "role": "agent",
             "message": next_question,
             "timestamp": datetime.now().isoformat(),
             "sentiment": sentiment,
-            "is_probe": is_vague
+            "is_probe": is_probe_flag
         })
         
-        # 6. Update metadata
-        metadata['current_question'] += 1
+        # 11. Update metadata based on whether this is a probe or new question
+        if is_probe_flag:
+            # This is a probe - increment consecutive probe counter
+            metadata['consecutive_probes'] = consecutive_probes + 1
+            print(f"   📈 Probe count: {metadata['consecutive_probes']}/{MAX_CONSECUTIVE_PROBES}")
+        else:
+            # This is a new question - advance question counter and reset probes
+            metadata['current_question'] += 1
+            metadata['consecutive_probes'] = 0  # Reset on new question
+            print(f"   📍 Question #{metadata['current_question']}/{metadata['total_questions']}")
         
-        # 7. Check if interview should end (15 questions reached)
+        print(f"{'='*60}\n")
+        
+        # 12. Check if interview should end (15 questions reached)
         is_complete = metadata['current_question'] >= metadata['total_questions']
         
-        # 8. Save back to Redis
+        # 13. Save back to Redis
         redis_client.set(
             f"session:{session_id}:conversation",
             json.dumps(conversation),
@@ -335,13 +814,14 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             success=True,
             next_question=next_question,
-            is_probe=is_vague,
+            is_probe=is_probe_flag,
             sentiment=sentiment,
             progress=ProgressInfo(
                 current=metadata['current_question'],
                 total=metadata['total_questions']
             ),
-            is_complete=is_complete
+            is_complete=is_complete,
+            terminated_early=False
         )
     
     except HTTPException:
@@ -369,6 +849,10 @@ async def end_interview(request: EndRequest):
         
         metadata = json.loads(metadata_json)
         
+        # Check if terminated early
+        terminated_early = metadata.get('terminated_early', False)
+        termination_reason = metadata.get('termination_reason', None)
+        
         # 2. Calculate overall sentiment
         sentiments = [msg.get('sentiment', 'neutral') for msg in conversation if msg['role'] == 'user']
         sentiment_scores = {
@@ -379,7 +863,10 @@ async def end_interview(request: EndRequest):
         avg_sentiment = sum(sentiment_scores.get(s, 0.5) for s in sentiments) / len(sentiments) if sentiments else 0.5
         
         # 3. Generate summary and key themes
-        summary, key_themes = generate_summary_with_groq(conversation)
+        summary, key_themes = generate_summary_with_groq(conversation, terminated_early)
+        
+        if terminated_early:
+            summary = f"[Interview terminated early: {termination_reason}] {summary}"
         
         # 4. Calculate duration
         start_time = datetime.fromisoformat(metadata['started_at'])
@@ -394,9 +881,15 @@ async def end_interview(request: EndRequest):
                 timestamp=msg["timestamp"]
             ))
         
-        # 6. Clean up Redis (optional - can let it expire)
+        # 6. Clean up Redis
         redis_client.delete(f"session:{session_id}:conversation")
         redis_client.delete(f"session:{session_id}:metadata")
+        
+        print(f"✅ Interview ended: {session_id}")
+        if terminated_early:
+            print(f"   Reason: {termination_reason}")
+        print(f"   Duration: {duration_seconds}s")
+        print(f"   Questions: {metadata['current_question']}/{metadata['total_questions']}")
         
         return EndResponse(
             success=True,
@@ -404,7 +897,9 @@ async def end_interview(request: EndRequest):
             summary=summary,
             sentiment_score=round(avg_sentiment, 2),
             key_themes=key_themes,
-            total_duration_seconds=duration_seconds
+            total_duration_seconds=duration_seconds,
+            terminated_early=terminated_early,
+            termination_reason=termination_reason
         )
     
     except HTTPException:

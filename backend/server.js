@@ -80,6 +80,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { email }
     });
+    console.log(user);
     
     if (!user) {
       return error(res, 'INVALID_CREDENTIALS', 'Invalid email or password', 401);
@@ -177,6 +178,141 @@ app.post('/api/templates', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     error(res, 'SERVER_ERROR', 'Failed to create template', 500);
+  }
+});
+
+// Get all session IDs for a specific template
+app.get('/api/templates/:id/sessions', verifyToken, async (req, res) => {
+  try {
+    const templateId = req.params.id;
+    console.log('Fetching sessions for template:', templateId);
+
+    // Verify template belongs to researcher
+    const template = await prisma.template.findFirst({
+      where: {
+        id: templateId,
+        researcher_id: req.user.id
+      }
+    });
+
+    if (!template) {
+      console.log('Template not found or not owned by researcher');
+      return error(res, 'NOT_FOUND', 'Template not found', 404);
+    }
+
+    console.log('Template found:', template.title);
+
+    // Get all sessions for this template
+    const sessions = await prisma.session.findMany({
+      where: {
+        template_id: templateId
+      },
+      select: {
+        id: true,
+        status: true,
+        started_at: true,
+        completed_at: true,
+        respondent: {
+          select: {
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        started_at: 'desc'
+      }
+    });
+
+    console.log('Found sessions:', sessions.length);
+
+    const sessionIds = sessions.map(session => ({
+      id: session.id,
+      status: session.status,
+      started_at: session.started_at,
+      completed_at: session.completed_at,
+      respondent_email: session.respondent.email
+    }));
+
+    success(res, { 
+      template_id: templateId,
+      session_ids: sessionIds,
+      total_sessions: sessions.length
+    });
+  } catch (err) {
+    console.error('Error in /api/templates/:id/sessions:', err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch template sessions', 500);
+  }
+});
+
+// Get all respondent IDs who haven't attended any session under this template
+app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res) => {
+  try {
+    const templateId = req.params.id;
+    console.log('Fetching available respondents for template:', templateId);
+
+    // Verify template belongs to researcher
+    const template = await prisma.template.findFirst({
+      where: {
+        id: templateId,
+        researcher_id: req.user.id
+      }
+    });
+
+    if (!template) {
+      console.log('Template not found or not owned by researcher');
+      return error(res, 'NOT_FOUND', 'Template not found', 404);
+    }
+
+    console.log('Template found:', template.title);
+
+    // Get all respondent IDs who have already attended sessions for this template
+    const attendedRespondents = await prisma.session.findMany({
+      where: {
+        template_id: templateId
+      },
+      select: {
+        respondent_id: true
+      }
+    });
+
+    const attendedRespondentIds = attendedRespondents.map(s => s.respondent_id);
+    console.log('Attended respondent IDs:', attendedRespondentIds);
+
+    // Get all respondents who haven't attended any session for this template
+    const availableRespondents = await prisma.user.findMany({
+      where: {
+        role: 'respondent',
+        id: {
+          notIn: attendedRespondentIds
+        }
+      },
+      select: {
+        id: true,
+        email: true,
+        created_at: true
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    console.log('Available respondents found:', availableRespondents.length);
+
+    const respondentIds = availableRespondents.map(respondent => ({
+      id: respondent.id,
+      email: respondent.email,
+      created_at: respondent.created_at
+    }));
+
+    success(res, { 
+      template_id: templateId,
+      available_respondent_ids: respondentIds,
+      total_available: availableRespondents.length,
+      total_attended: attendedRespondentIds.length
+    });
+  } catch (err) {
+    console.error('Error in /api/templates/:id/available-respondents:', err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch available respondents', 500);
   }
 });
 

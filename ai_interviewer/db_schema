@@ -1,0 +1,91 @@
+-- ========================================================================
+-- AI INTERVIEWER - COMPLETE DATABASE SCHEMA (V2 - Relaxed for Testing)
+-- ========================================================================
+-- This schema includes all required tables for the application, including
+-- support for storing analyzed responses and termination metadata.
+--
+-- FEATURES:
+-- - No Row Level Security (RLS)
+-- - No Foreign Key Constraints
+-- - Designed purely for local development and testing.
+-- ========================================================================
+
+-- ========= Step 1: Clean Up Existing Tables =========
+-- The 'CASCADE' option automatically removes dependent objects.
+DROP TABLE IF EXISTS public.analyzed_responses CASCADE;
+DROP TABLE IF EXISTS public.interview_summaries CASCADE;
+DROP TABLE IF EXISTS public.interview_sessions CASCADE;
+DROP TABLE IF EXISTS public.interview_templates CASCADE;
+
+-- ========= Step 2: Create Application Tables =========
+
+-- --- 2.1 INTERVIEW TEMPLATES TABLE ---
+CREATE TABLE public.interview_templates (
+    template_id TEXT PRIMARY KEY,
+    research_topic TEXT NOT NULL,
+    starter_questions JSONB NOT NULL DEFAULT '[]',
+    probe_triggers JSONB DEFAULT '[]',
+    max_questions INT DEFAULT 15,
+    user_type TEXT,
+    created_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.interview_templates IS 'Stores reusable interview templates with questions and settings.';
+
+-- --- 2.2 INTERVIEW SESSIONS TABLE ---
+CREATE TABLE public.interview_sessions (
+    session_id UUID PRIMARY KEY,
+    respondent_id TEXT,
+    template_id TEXT,
+    research_topic TEXT,
+    conversation_history JSONB DEFAULT '[]',
+    current_question_count INT DEFAULT 0,
+    max_questions INT DEFAULT 15,
+    is_complete BOOLEAN DEFAULT FALSE,
+    probe_count INT DEFAULT 0,
+    metadata JSONB DEFAULT '{}'::jsonb, -- For storing completion %, termination reason, etc.
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.interview_sessions IS 'Tracks active and completed interview sessions, including metadata.';
+
+-- --- 2.3 ANALYZED RESPONSES TABLE (NEW) ---
+-- This table is crucial for the summary agent to access all analyses.
+CREATE TABLE public.analyzed_responses (
+    id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL,
+    respondent_id TEXT,
+    response_text TEXT NOT NULL,
+    sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
+    quality TEXT CHECK (quality IN ('shallow', 'vague', 'good')),
+    intent TEXT CHECK (intent IN ('continue', 'end_interview')),
+    word_count INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.analyzed_responses IS 'Stores the AI analysis (quality, sentiment, intent) of each individual user response.';
+
+-- --- 2.4 INTERVIEW SUMMARIES TABLE ---
+CREATE TABLE public.interview_summaries (
+    id BIGSERIAL PRIMARY KEY,
+    session_id UUID UNIQUE NOT NULL,
+    respondent_id TEXT,
+    template_id TEXT,
+    research_topic TEXT,
+    total_questions INT DEFAULT 0,
+    key_insights JSONB DEFAULT '[]',
+    sentiment_distribution JSONB DEFAULT '{}',
+    conversation_summary TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb, -- For storing termination details, etc.
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.interview_summaries IS 'Stores the final AI-generated summaries of completed or terminated interviews.';
+
+
+-- ========= Step 3: Create Indexes for Performance =========
+CREATE INDEX idx_sessions_respondent ON public.interview_sessions(respondent_id);
+CREATE INDEX idx_analyzed_responses_session ON public.analyzed_responses(session_id);
+CREATE INDEX idx_summaries_respondent ON public.interview_summaries(respondent_id);

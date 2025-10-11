@@ -12,7 +12,11 @@ const PORT = process.env.PORT || 8000;
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5174',
+  credentials: true,  
+}
+));
 app.use(express.json());
 
 // Helper functions

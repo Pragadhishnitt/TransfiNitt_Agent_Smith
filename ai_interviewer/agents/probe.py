@@ -1,20 +1,145 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import ChatPromptTemplate
-from templates.question_templates import get_probe_question, get_follow_up
-from models.schemas import AnalyzedResponse, ResponseQuality
+from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
 import config
+from typing import List, Dict, Optional
 import random
 
 class ProbeAgent:
-    """Generates probing questions for shallow/vague responses"""
+    """Ultra-fast probe generation with deviation detection and redirection"""
     
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
-            model=config.COMPLEX_LLM_MODEL,
-            temperature=0.8,  # Slightly higher for more varied probes
-            google_api_key=config.GEMINI_API_KEY,
-            convert_system_message_to_human=True
+        self.llm = ChatGroq(
+            model=config.PROBE_MODEL,
+            temperature=config.PROBE_TEMPERATURE,
+            api_key=config.GROQ_API_KEY,
+            max_tokens=config.PROBE_MAX_TOKENS,
+            timeout=config.LLM_TIMEOUT
         )
+        
+        # INSTANT TEMPLATE PROBES (no LLM needed)
+        self.quick_probes = {
+            "yes": ["Why is that?", "What makes you say that?"],
+            "no": ["Why not?", "What would change your mind?"],
+            "good": ["What makes it good?", "Can you give an example?"],
+            "bad": ["What makes it bad?", "How could it be better?"],
+            "okay": ["What makes it okay?", "What could improve it?"],
+            "fine": ["What's fine about it?", "What would make it better?"],
+            "maybe": ["What makes you uncertain?", "What would help you decide?"],
+            "not really": ["Why do you feel that way?", "Tell me more."],
+            "i guess": ["What makes you unsure?", "What do you think?"],
+            "kind of": ["In what way?", "Can you be more specific?"],
+            "sort of": ["How so?", "What exactly?"],
+            "idk": ["Take a guess?", "What's your gut feeling?"],
+            "dunno": ["What do you think?", "Any initial thoughts?"],
+            "whatever": ["What would you prefer?", "Is something bothering you?"],
+        }
+        
+        # REDIRECTION TEMPLATES
+        self.redirect_templates = [
+            "That's interesting! But let's get back to {topic} - {original_question}",
+            "I appreciate that insight! Now, back to {topic}: {original_question}",
+            "Good point! Let me refocus on {topic} - {original_question}",
+            "Thanks for sharing! Let's return to {topic}: {original_question}",
+        ]
+    
+    def _get_template_probe(self, user_response: str) -> Optional[str]:
+        """INSTANT: Return template probe for common responses"""
+        text_lower = user_response.lower().strip()
+        
+        # Exact match
+        if text_lower in self.quick_probes:
+            return random.choice(self.quick_probes[text_lower])
+        
+        # Pattern matching
+        words = text_lower.split()
+        if len(words) <= 3:
+            # "It is good/bad/okay"
+            if len(words) == 3 and words[0] == "it" and words[1] in ["is", "was"]:
+                return "What specifically about it?"
+            
+            # "I like/hate it"
+            if len(words) == 3 and words[0] == "i" and words[2] == "it":
+                return f"What specifically do you {words[1]} about it?"
+        
+        return None
+    
+    async def check_deviation(
+        self,
+        original_question: str,
+        user_response: str,
+        research_topic: str
+    ) -> bool:
+        """
+        Check if user's response deviates from the original question.
+        
+        Returns:
+            True if response is off-topic/deviated
+            False if response is on-topic
+        """
+        # Quick heuristic checks first
+        original_lower = original_question.lower()
+        response_lower = user_response.lower()
+        
+        # Extract key terms from original question
+        question_keywords = self._extract_keywords(original_lower)
+        
+        # Check if ANY keyword appears in response
+        has_overlap = any(keyword in response_lower for keyword in question_keywords)
+        
+        # If response is very short AND has no overlap, likely deviated
+        word_count = len(user_response.split())
+        if word_count <= 10 and not has_overlap:
+            # Quick check: Is response asking about the question itself?
+            deviation_indicators = [
+                "why", "what", "how", "deviate", "topic", "question",
+                "asked", "asking", "instead", "different", "change"
+            ]
+            if any(indicator in response_lower for indicator in deviation_indicators):
+                return True
+        
+        # For longer responses, use LLM to check relevance
+        if word_count > 10:
+            return await self._llm_check_deviation(original_question, user_response, research_topic)
+        
+        return False
+    
+    def _extract_keywords(self, text: str) -> List[str]:
+        """Extract meaningful keywords from question"""
+        # Remove common question words
+        stop_words = {
+            "tell", "me", "about", "your", "how", "what", "when", "where",
+            "why", "do", "does", "did", "is", "are", "was", "were",
+            "the", "a", "an", "and", "or", "but", "in", "on", "at"
+        }
+        
+        words = text.split()
+        keywords = [
+            word.strip('.,!?;:"()[]{}') 
+            for word in words 
+            if word.lower() not in stop_words and len(word) > 3
+        ]
+        
+        return keywords[:5]  # Top 5 keywords
+    
+    async def _llm_check_deviation(
+        self,
+        original_question: str,
+        user_response: str,
+        research_topic: str
+    ) -> bool:
+        """Use LLM to check if response is off-topic"""
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Return ONLY 'yes' or 'no'. Is the user's response off-topic or unrelated to the question?"),
+            ("user", f"Question: {original_question}\nResponse: {user_response}\n\nIs response off-topic?")
+        ])
+        
+        try:
+            result = await (prompt | self.llm).ainvoke({})
+            answer = result.content.strip().lower()
+            return "yes" in answer
+        except:
+            return False  # If LLM fails, assume on-topic
     
     async def generate_probe_question(
         self,
@@ -22,98 +147,60 @@ class ProbeAgent:
         user_response: str,
         topic: str,
         research_topic: str,
-        conversation_history: list
+        conversation_history: List[Dict[str, str]]
     ) -> str:
         """
-        Generate a probing question based on the user's shallow/vague response.
+        Fast probe generation with deviation detection and redirection.
         
-        Args:
-            original_question: The question that was just asked
-            user_response: The user's shallow/vague response
-            topic: Suggested topic to probe about (from deep analysis)
-            research_topic: Overall research topic
-            conversation_history: Full conversation so far
+        NEW BEHAVIOR:
+        1. Check if user deviated from original question
+        2. If yes → Acknowledge + Redirect to original question
+        3. If no → Generate clarifying probe
         """
         
-        # STRATEGY 1: For VERY short responses (1-4 words), use template-based probes
+        # STEP 1: Check for deviation
+        is_deviated = await self.check_deviation(original_question, user_response, research_topic)
+        
+        if is_deviated:
+            # User deviated - redirect back to original question
+            print(f"  🔄 DEVIATION DETECTED - Redirecting to original question")
+            
+            redirect = random.choice(self.redirect_templates)
+            return redirect.format(
+                topic=research_topic,
+                original_question=original_question
+            )
+        
+        # STEP 2: No deviation - generate normal probe
+        
+        # FASTEST: Template probe (no LLM)
+        template_probe = self._get_template_probe(user_response)
+        if template_probe:
+            return template_probe
+        
+        # FAST: LLM probe (minimal prompt)
         word_count = len(user_response.split())
-        if word_count <= 4:
-            templates = [
-                "Could you tell me more about that?",
-                "That's interesting! Can you elaborate a bit?",
-                f"What specifically about {topic if topic != 'None' else 'that'} stands out to you?",
-                "Can you give me a specific example?",
-                "Help me understand - what does that look like for you?",
-            ]
-            return random.choice(templates)
         
-        # STRATEGY 2: For vague responses, use AI to generate contextual probe
-        # Get recent context (last 2 exchanges)
-        recent_context = []
-        for msg in conversation_history[-4:]:
-            role = "You" if msg["role"] == "assistant" else "User"
-            recent_context.append(f"{role}: {msg['content']}")
-        context_str = "\n".join(recent_context)
+        if word_count <= 10:
+            # Short response - use minimal prompt
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", "Generate ONE short follow-up question (under 12 words). Return ONLY the question."),
+                ("user", f"They said: {user_response}\nAsk for specifics:")
+            ])
+        else:
+            # Longer response - use slightly more context
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", f"Topic: {research_topic}. Generate ONE specific follow-up question (under 15 words)."),
+                ("user", f"Q: {original_question}\nA: {user_response}\nFollow-up:")
+            ])
         
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", f"""You are conducting a research interview about: {research_topic}
-
-The user just gave a vague or shallow response. Your job is to generate ONE follow-up question that:
-1. Is warm, friendly, and encouraging (not interrogating)
-2. Gently asks for more specific details or examples
-3. References what they just said to show you're listening
-4. Feels natural and conversational
-5. Helps them elaborate without feeling pressured
-
-IMPORTANT: 
-- Keep it to ONE short question (under 20 words)
-- Don't use phrases like "Could you elaborate?" or "Tell me more" - be more creative
-- Ask about specifics: examples, feelings, experiences, or details
-- Make it feel like genuine curiosity, not an interview
-
-Examples of GOOD probe questions:
-- "What does that typically look like for you?"
-- "Can you walk me through a recent time that happened?"
-- "What's one thing about that you wish was different?"
-- "How does that compare to your experience before?"
-- "What made you feel that way?"
-
-Examples of BAD probe questions (don't do these):
-- "Could you elaborate on that?"
-- "Tell me more."
-- "Can you provide more details?"
-
-Return ONLY the question, no explanation."""),
-            ("user", f"""Recent conversation:
-{context_str}
-
-Their last response was: "{user_response}"
-
-{f'They mentioned: {topic}' if topic != 'None' else ''}
-
-Generate ONE natural follow-up question:""")
-        ])
-        
-        chain = prompt | self.llm
-        result = await chain.ainvoke({})
-        
-        probe_q = result.content.strip()
-        
-        # Remove quotes if the LLM added them
-        probe_q = probe_q.strip('"').strip("'")
-        
-        # Ensure it ends with a question mark
-        if not probe_q.endswith('?'):
-            probe_q += '?'
-        
-        return probe_q
-    
-    def should_stop_probing(self, probe_count: int, max_probes: int = 2) -> bool:
-        """
-        Determine if we should stop probing and move on.
-        Avoid annoying the user with too many follow-ups.
-        """
-        return probe_count >= max_probes
+        try:
+            result = await (prompt | self.llm).ainvoke({})
+            probe_q = result.content.strip().strip('"').strip("'")
+            return probe_q if probe_q.endswith('?') else probe_q + '?'
+        except Exception as e:
+            # Ultra-fast fallback
+            return "Can you tell me more about that?"
 
 # Singleton instance
 probe_agent = ProbeAgent()

@@ -15,7 +15,7 @@ const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
 const requestLogger = require('./logger');
 app.use(requestLogger);
 app.use(cors({
-  origin: 'http://localhost:5174',
+  origin: ['http://localhost:5174', 'http://localhost:5173'],
   credentials: true,  
 }
 ));

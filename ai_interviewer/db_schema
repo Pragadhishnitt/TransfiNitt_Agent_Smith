@@ -1,19 +1,25 @@
 -- ========================================================================
--- AI INTERVIEWER - COMPLETE DATABASE SCHEMA (Relaxed for Testing)
+-- AI INTERVIEWER - COMPLETE DATABASE SCHEMA (V2 - Relaxed for Testing)
 -- ========================================================================
--- This schema includes ALL required tables for the application
--- No RLS, No Foreign Keys - Pure testing mode
+-- This schema includes all required tables for the application, including
+-- support for storing analyzed responses and termination metadata.
+--
+-- FEATURES:
+-- - No Row Level Security (RLS)
+-- - No Foreign Key Constraints
+-- - Designed purely for local development and testing.
 -- ========================================================================
 
--- Clean up existing tables
+-- ========= Step 1: Clean Up Existing Tables =========
+-- The 'CASCADE' option automatically removes dependent objects.
 DROP TABLE IF EXISTS public.analyzed_responses CASCADE;
 DROP TABLE IF EXISTS public.interview_summaries CASCADE;
 DROP TABLE IF EXISTS public.interview_sessions CASCADE;
 DROP TABLE IF EXISTS public.interview_templates CASCADE;
 
--- ========================================================================
--- 1. INTERVIEW TEMPLATES TABLE
--- ========================================================================
+-- ========= Step 2: Create Application Tables =========
+
+-- --- 2.1 INTERVIEW TEMPLATES TABLE ---
 CREATE TABLE public.interview_templates (
     template_id TEXT PRIMARY KEY,
     research_topic TEXT NOT NULL,
@@ -25,75 +31,61 @@ CREATE TABLE public.interview_templates (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ========================================================================
--- 2. INTERVIEW SESSIONS TABLE
--- ========================================================================
+COMMENT ON TABLE public.interview_templates IS 'Stores reusable interview templates with questions and settings.';
+
+-- --- 2.2 INTERVIEW SESSIONS TABLE ---
 CREATE TABLE public.interview_sessions (
     session_id UUID PRIMARY KEY,
-    respondent_id TEXT NOT NULL,
-    template_id TEXT NOT NULL,
-    research_topic TEXT NOT NULL,
+    respondent_id TEXT,
+    template_id TEXT,
+    research_topic TEXT,
     conversation_history JSONB DEFAULT '[]',
     current_question_count INT DEFAULT 0,
     max_questions INT DEFAULT 15,
     is_complete BOOLEAN DEFAULT FALSE,
     probe_count INT DEFAULT 0,
+    metadata JSONB DEFAULT '{}'::jsonb, -- For storing completion %, termination reason, etc.
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ========================================================================
--- 3. ANALYZED RESPONSES TABLE (NEW - REQUIRED)
--- ========================================================================
--- This table stores the analyzed version of each user response
+COMMENT ON TABLE public.interview_sessions IS 'Tracks active and completed interview sessions, including metadata.';
+
+-- --- 2.3 ANALYZED RESPONSES TABLE (NEW) ---
+-- This table is crucial for the summary agent to access all analyses.
 CREATE TABLE public.analyzed_responses (
     id BIGSERIAL PRIMARY KEY,
     session_id UUID NOT NULL,
-    respondent_id TEXT NOT NULL,
+    respondent_id TEXT,
     response_text TEXT NOT NULL,
     sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
     quality TEXT CHECK (quality IN ('shallow', 'vague', 'good')),
+    intent TEXT CHECK (intent IN ('continue', 'end_interview')),
     word_count INT DEFAULT 0,
-    key_insights JSONB DEFAULT '[]',
-    emotional_tone TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for faster lookups by session
-CREATE INDEX idx_analyzed_responses_session ON public.analyzed_responses(session_id);
+COMMENT ON TABLE public.analyzed_responses IS 'Stores the AI analysis (quality, sentiment, intent) of each individual user response.';
 
--- ========================================================================
--- 4. INTERVIEW SUMMARIES TABLE
--- ========================================================================
+-- --- 2.4 INTERVIEW SUMMARIES TABLE ---
 CREATE TABLE public.interview_summaries (
     id BIGSERIAL PRIMARY KEY,
     session_id UUID UNIQUE NOT NULL,
-    respondent_id TEXT NOT NULL,
-    template_id TEXT NOT NULL,
-    research_topic TEXT NOT NULL,
+    respondent_id TEXT,
+    template_id TEXT,
+    research_topic TEXT,
     total_questions INT DEFAULT 0,
     key_insights JSONB DEFAULT '[]',
     sentiment_distribution JSONB DEFAULT '{}',
     conversation_summary TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb, -- For storing termination details, etc.
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ========================================================================
--- INDEXES FOR PERFORMANCE
--- ========================================================================
+COMMENT ON TABLE public.interview_summaries IS 'Stores the final AI-generated summaries of completed or terminated interviews.';
+
+
+-- ========= Step 3: Create Indexes for Performance =========
 CREATE INDEX idx_sessions_respondent ON public.interview_sessions(respondent_id);
-CREATE INDEX idx_sessions_template ON public.interview_sessions(template_id);
-CREATE INDEX idx_sessions_created ON public.interview_sessions(created_at DESC);
+CREATE INDEX idx_analyzed_responses_session ON public.analyzed_responses(session_id);
 CREATE INDEX idx_summaries_respondent ON public.interview_summaries(respondent_id);
-CREATE INDEX idx_summaries_created ON public.interview_summaries(created_at DESC);
-
--- ========================================================================
--- SAMPLE DATA (Optional - for testing)
--- ========================================================================
--- The application will seed templates automatically on startup,
--- but you can also manually insert test data here if needed.
-
-COMMENT ON TABLE public.interview_templates IS 'Stores reusable interview templates with questions and settings';
-COMMENT ON TABLE public.interview_sessions IS 'Tracks active and completed interview sessions';
-COMMENT ON TABLE public.analyzed_responses IS 'Stores AI analysis of each user response';
-COMMENT ON TABLE public.interview_summaries IS 'Final summaries generated at interview completion';

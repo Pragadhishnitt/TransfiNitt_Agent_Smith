@@ -27,7 +27,7 @@ CONVERSATION_TIMEOUT = 3600  # 1 hour session timeout
 # ========================================================================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 COMPLEX_LLM_MODEL = "gemini-2.5-flash"
-SIMPLE_LLM_MODEL = "gemma-7b-it" 
+SIMPLE_LLM_MODEL = "gemini-2.5-flash" 
 LLM_TEMPERATURE = 0.7
 
 # ========================================================================

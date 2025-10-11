@@ -15,7 +15,7 @@ class ResponseQuality(str, Enum):
 
 class InterviewState(BaseModel):
     session_id: str
-    respondent_id: str # The UUID of the user taking the interview
+    respondent_id: str  # Added
     template_id: str
     research_topic: str
     conversation_history: List[Dict[str, str]] = []
@@ -23,10 +23,11 @@ class InterviewState(BaseModel):
     max_questions: int = 15
     is_complete: bool = False
     probe_count: int = 0
+    should_terminate_early: bool = False  # NEW
+    termination_reason: Optional[str] = None  # NEW
 
 class UserResponse(BaseModel):
     session_id: str
-    respondent_id: str
     message: str
     timestamp: datetime = Field(default_factory=datetime.now)
 
@@ -44,18 +45,15 @@ class InterviewTemplate(BaseModel):
     probe_triggers: List[str] = []
     max_questions: int = 15
     user_type: Optional[str] = None
-    # FIX: Made this field optional to allow for system-generated templates (None)
-    # or user-created templates (which will have a UUID string).
-    created_by: Optional[str] = None
 
 class InterviewSummary(BaseModel):
     session_id: str
-    respondent_id: str
+    respondent_id: str  # Added
     template_id: str
     research_topic: str
     total_questions: int
     key_insights: List[str]
     sentiment_distribution: Dict[str, int]
     conversation_summary: str
+    metadata: Optional[Dict] = None  # NEW - stores early_termination, termination_reason, etc.
     created_at: datetime = Field(default_factory=datetime.now)
-

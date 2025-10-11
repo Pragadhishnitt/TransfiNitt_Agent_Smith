@@ -115,7 +115,7 @@ async def start_interview(
     Starts a new interview session for an authenticated user.
     Returns the first question.
     """
-    # Get template
+    # Get template (returns dict from Supabase)
     template = await db_client.get_template(request.template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Interview template not found")
@@ -129,8 +129,8 @@ async def start_interview(
         session_id=session_id,
         respondent_id=respondent_id,
         template_id=request.template_id,
-        research_topic=template.research_topic,
-        max_questions=template.max_questions,
+        research_topic=template["research_topic"],  # Access as dict
+        max_questions=template["max_questions"],
         conversation_history=[],
         current_question_count=1,
         is_complete=False,
@@ -138,7 +138,7 @@ async def start_interview(
     )
     
     # Get first question from template
-    first_question = template.starter_questions[0]
+    first_question = template["starter_questions"][0]  # Access as dict
     initial_state.conversation_history.append({
         "role": "assistant",
         "content": first_question
@@ -152,8 +152,8 @@ async def start_interview(
         session_id=session_id,
         question=first_question,
         question_number=1,
-        max_questions=template.max_questions,
-        research_topic=template.research_topic
+        max_questions=template["max_questions"],  # Access as dict
+        research_topic=template["research_topic"]  # Access as dict
     )
 
 @app.post("/interview/chat", response_model=ChatResponse, tags=["Interview"])

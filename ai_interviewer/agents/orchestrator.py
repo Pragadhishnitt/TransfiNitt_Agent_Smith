@@ -148,7 +148,7 @@ class OrchestratorAgent:
         return {
             "session_id": state.session_id,
             "is_complete": True,
-            "summary": summary.dict(),
+            "summary": summary.model_dump(),
             "message": "Interview completed. Thank you for your time!"
         }
 

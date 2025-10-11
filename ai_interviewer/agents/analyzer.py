@@ -1,196 +1,185 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import re
+import json
 
 from models.schemas import AnalyzedResponse, ResponseQuality, SentimentType
 import config
 
 # --- Pydantic model for structured LLM output ---
 class DeepAnalysis(BaseModel):
-    key_insights: List[str] = Field(description="List of 2-3 key insights from the user's response.")
-    emotional_tone: str = Field(description="The primary emotional tone of the response (e.g., enthusiastic, hesitant, frustrated).")
-    needs_follow_up: bool = Field(description="True if the response is shallow, vague, or requires clarification.")
-    suggested_follow_up_topic: str = Field(description="A specific topic or keyword to focus on for a follow-up question. Should be 'None' if no follow-up is needed.")
+    key_insights: List[str] = Field(description="List of 1-2 key insights")
+    emotional_tone: str = Field(description="Primary emotional tone")
+    needs_follow_up: bool = Field(description="True if shallow/vague")
+    suggested_follow_up_topic: str = Field(description="Topic to probe or 'None'")
 
 class ResponseAnalyzer:
-    """
-    Analyzes user responses using a multi-LLM strategy for sentiment, quality, and insights.
-    """
+    """Ultra-fast response analyzer using Groq"""
+    
     def __init__(self):
-        self.complex_llm = ChatGoogleGenerativeAI(
-            model=config.COMPLEX_LLM_MODEL,
-            temperature=config.LLM_TEMPERATURE,
-            google_api_key=config.GEMINI_API_KEY,
-            convert_system_message_to_human=True
-        )
-        self.simple_llm = ChatGoogleGenerativeAI(
-            model=config.SIMPLE_LLM_MODEL,
-            temperature=config.LLM_TEMPERATURE,
-            google_api_key=config.GEMINI_API_KEY,
-            convert_system_message_to_human=True
+        # GROQ - Ultra-fast inference
+        self.fast_llm = ChatGroq(
+            model=config.ANALYSIS_MODEL,
+            temperature=config.ANALYSIS_TEMPERATURE,
+            api_key=config.GROQ_API_KEY,
+            max_tokens=config.ANALYSIS_MAX_TOKENS,
+            timeout=config.LLM_TIMEOUT
         )
 
     def _rule_based_quality_check(self, response_text: str) -> Optional[ResponseQuality]:
         """
-        Fast rule-based quality check for obvious shallow/vague responses.
-        Returns None if rules are inconclusive and LLM should be used.
+        Lightning-fast rule-based quality check.
+        
+        UPDATED: More intelligent detection - doesn't flag valid short responses.
         """
         text = response_text.strip().lower()
         word_count = len(response_text.split())
         
-        # Rule 1: Very short responses (1-3 words) are SHALLOW
-        if word_count <= 3:
+        # Rule 1: ONLY 1-2 words = SHALLOW
+        # Changed from <= 3 to <= 2
+        if word_count <= 2:
             return ResponseQuality.SHALLOW
         
-        # Rule 2: Single sentence with less than 6 words is SHALLOW
-        sentences = re.split(r'[.!?]+', text)
-        non_empty_sentences = [s.strip() for s in sentences if s.strip()]
-        if len(non_empty_sentences) == 1 and word_count < 6:
-            return ResponseQuality.SHALLOW
-        
-        # Rule 3: Check for vague indicators
-        vague_patterns = [
-            r'\bit is (good|bad|okay|fine|nice)\b',  # "it is good"
-            r'\b(maybe|perhaps|possibly|probably|kind of|sort of)\b',
-            r'\bi guess\b',
-            r'\bi think so\b',
-            r'\bnot sure\b',
-            r'\bwhatever\b',
-            r'\bi don\'?t know\b',
-        ]
-        
-        vague_count = sum(1 for pattern in vague_patterns if re.search(pattern, text))
-        
-        # If response has multiple vague indicators and is short, it's VAGUE
-        if vague_count >= 2 and word_count < 15:
-            return ResponseQuality.VAGUE
-        
-        # If response is mostly vague words
-        if vague_count >= 1 and word_count < 8:
-            return ResponseQuality.VAGUE
-        
-        # Rule 4: One-word or two-word responses are SHALLOW
-        common_shallow_responses = [
+        # Rule 2: EXACT MATCH common shallow responses
+        # This catches single-word answers like "yes", "no", "good"
+        common_shallow = {
             'yes', 'no', 'yeah', 'nah', 'sure', 'okay', 'ok', 
             'good', 'bad', 'fine', 'nice', 'great', 'cool',
+            'maybe', 'idk', 'dunno', 'whatever', 'nope', 'yep'
+        }
+        
+        if text in common_shallow:
+            return ResponseQuality.SHALLOW
+        
+        # Rule 3: EXACT MATCH two-word shallow responses
+        two_word_shallow = {
             'yes please', 'no thanks', 'sounds good', 'not really',
-            'i guess', 'maybe', 'idk', 'dunno'
-        ]
+            'i guess', 'kind of', 'sort of', 'not sure'
+        }
         
-        if text in common_shallow_responses:
+        if text in two_word_shallow:
             return ResponseQuality.SHALLOW
         
-        # Rule 5: Repetitive responses without substance
-        words = response_text.split()
-        if len(set(words)) < len(words) * 0.5 and word_count < 10:
-            return ResponseQuality.SHALLOW
+        # Rule 4: "It is [adjective]" pattern (3-4 words)
+        if word_count <= 4:
+            if re.match(r'^it (is|was) \w+$', text):
+                return ResponseQuality.SHALLOW
+            
+            # "I like it" / "I hate it" patterns
+            if re.match(r'^i (like|love|hate|dislike) (it|that|this)$', text):
+                return ResponseQuality.SHALLOW
         
-        # No conclusive rule match - let LLM decide
-        return None
+        # Rule 5: Check for vague patterns ONLY if short (< 8 words)
+        # Don't flag longer responses just because they have "maybe"
+        if word_count < 8:
+            # Multiple vague indicators in a short response
+            vague_count = 0
+            vague_words = ['maybe', 'perhaps', 'i guess', 'not sure', 
+                          'whatever', 'kind of', 'sort of', 'idk', 'dunno']
+            
+            for vague in vague_words:
+                if vague in text:
+                    vague_count += 1
+            
+            # If 2+ vague words in a short response, it's VAGUE
+            if vague_count >= 2:
+                return ResponseQuality.VAGUE
+        
+        # NEW Rule 6: Check if response has SUBSTANCE
+        # If 5+ words AND contains action/description words, it's likely GOOD
+        if word_count >= 5:
+            # Check for content indicators (verbs, adjectives, specific nouns)
+            substance_indicators = [
+                # Action verbs
+                'drink', 'need', 'use', 'make', 'get', 'have', 'take', 
+                'feel', 'think', 'like', 'love', 'hate', 'want', 'enjoy',
+                'provides', 'gives', 'helps', 'makes', 'causes',
+                
+                # Descriptive words
+                'every', 'daily', 'morning', 'afternoon', 'evening', 
+                'always', 'usually', 'often', 'sometimes', 'never',
+                'boost', 'energy', 'focus', 'alert', 'awake',
+                
+                # Specific details
+                'cup', 'mug', 'espresso', 'latte', 'black', 'milk', 'sugar',
+                'work', 'home', 'office', 'kitchen', 'coffee shop'
+            ]
+            
+            has_substance = any(indicator in text for indicator in substance_indicators)
+            
+            if has_substance:
+                # Has substance words + 5+ words = Likely GOOD
+                return None  # Let it pass to LLM or return GOOD
+        
+        return None  # Let LLM decide for ambiguous cases
 
     async def analyze(self, response_text: str) -> AnalyzedResponse:
         """
-        Performs a fast analysis of a user's response using a hybrid rule-based and AI approach.
+        Ultra-fast analysis with rule-based shortcuts.
+        
+        UPDATED: Better handling of valid short responses.
         """
         word_count = len(response_text.split())
         
-        # CRITICAL FIX: Try rule-based check first
-        rule_based_quality = self._rule_based_quality_check(response_text)
+        # STEP 1: Rule-based quality check (instant)
+        rule_quality = self._rule_based_quality_check(response_text)
         
-        if rule_based_quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]:
-            # For shallow/vague responses, still get sentiment but use rule-based quality
-            print(f"  ⚡ Rule-based: Detected {rule_based_quality.value.upper()} response")
+        if rule_quality:
+            # Skip LLM for obvious cases, use fast sentiment heuristic
+            sentiment = self._fast_sentiment_heuristic(response_text)
             
-            sentiment_prompt = ChatPromptTemplate.from_messages([
-                ("system", "Classify the sentiment as ONE word: 'positive', 'negative', or 'neutral'."),
-                ("user", response_text)
-            ])
-            sentiment_chain = sentiment_prompt | self.simple_llm
-            
-            try:
-                sentiment_result = await sentiment_chain.ainvoke({})
-                sentiment_text = sentiment_result.content.lower().strip()
-                # Extract just the sentiment word
-                if 'positive' in sentiment_text:
-                    sentiment = SentimentType.POSITIVE
-                elif 'negative' in sentiment_text:
-                    sentiment = SentimentType.NEGATIVE
-                else:
-                    sentiment = SentimentType.NEUTRAL
-            except Exception as e:
-                print(f"  ⚠️ Sentiment detection failed: {e}")
-                sentiment = SentimentType.NEUTRAL
+            print(f"  ⚡ Rule-based: {rule_quality.value.upper()}")
             
             return AnalyzedResponse(
                 response_text=response_text,
                 sentiment=sentiment,
-                quality=rule_based_quality,
+                quality=rule_quality,
                 word_count=word_count,
                 key_insights=[]
             )
         
-        # --- AI-Based Analysis for Longer/Ambiguous Responses ---
-        print(f"  🤖 AI-based: Analyzing response with LLM")
+        # STEP 2: Fast LLM analysis for ambiguous cases
+        print(f"  🤖 Using LLM for quality check...")
         
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are analyzing a user's response in a market research interview.
-
-Output ONLY a valid JSON object with exactly two keys: "sentiment" and "quality".
-
-Sentiment rules:
-- "positive" if the response expresses satisfaction, happiness, or approval
-- "negative" if it expresses dissatisfaction, frustration, or disapproval  
-- "neutral" otherwise
+            ("system", """Analyze response quality. Return JSON: {"sentiment":"positive|negative|neutral","quality":"shallow|vague|good"}
 
 Quality rules:
-- "shallow" if the response is very short (under 6 words) OR lacks specific details
-  Examples: "It's good", "I like it", "Yeah sure", "Not really"
-- "vague" if it uses uncertain language OR avoids giving concrete information
-  Examples: "Maybe", "I guess so", "Kind of", "Sort of okay"
-- "good" if it provides specific details, examples, or substantial information
+- "shallow": No specific details, just states a fact without explanation
+  Examples: "yes", "no", "it's good", "I like it"
+  
+- "vague": Uncertain or non-committal without specifics
+  Examples: "maybe", "I guess so", "kind of"
+  
+- "good": Has specific details, explanations, or substance (even if short!)
+  Examples: "Coffee gives me energy", "I drink it every morning", "It helps me focus"
 
-Examples:
-Input: "It is good"
-Output: {{"sentiment": "positive", "quality": "shallow"}}
-
-Input: "I guess it's okay"
-Output: {{"sentiment": "neutral", "quality": "vague"}}
-
-Input: "I really enjoy using it every morning because it saves me time and the interface is intuitive"
-Output: {{"sentiment": "positive", "quality": "good"}}
-
-Now analyze this response and return ONLY the JSON:"""),
-            ("user", response_text)
+IMPORTANT: 5+ words with substance = GOOD, even if brief!"""),
+            ("user", f"Response: {response_text}")
         ])
         
-        chain = prompt | self.simple_llm
-        
         try:
-            result = await chain.ainvoke({})
+            result = await (prompt | self.fast_llm).ainvoke({})
             content = result.content.strip()
             
-            # Extract JSON from response (sometimes LLMs add extra text)
+            # Extract JSON
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
-                content = json_match.group()
-            
-            # Parse JSON
-            import json
-            analysis_result = json.loads(content)
-            
-            sentiment = SentimentType(analysis_result.get("sentiment", "neutral"))
-            quality = ResponseQuality(analysis_result.get("quality", "good"))
-            
-            print(f"  ✅ AI Analysis: sentiment={sentiment.value}, quality={quality.value}")
-            
+                data = json.loads(json_match.group())
+                sentiment = SentimentType(data.get("sentiment", "neutral"))
+                quality = ResponseQuality(data.get("quality", "good"))
+            else:
+                raise ValueError("No JSON found")
+                
         except Exception as e:
-            print(f"  ⚠️ AI Analysis failed: {e}, defaulting to SHALLOW")
-            # If AI fails and response is short, assume SHALLOW
-            sentiment = SentimentType.NEUTRAL
-            quality = ResponseQuality.SHALLOW if word_count < 10 else ResponseQuality.GOOD
+            print(f"  ⚠️ LLM analysis failed: {e}")
+            # Fallback to heuristics
+            sentiment = self._fast_sentiment_heuristic(response_text)
+            # If 5+ words, assume GOOD; otherwise SHALLOW
+            quality = ResponseQuality.GOOD if word_count >= 5 else ResponseQuality.SHALLOW
 
         return AnalyzedResponse(
             response_text=response_text,
@@ -200,62 +189,78 @@ Now analyze this response and return ONLY the JSON:"""),
             key_insights=[]
         )
 
+    def _fast_sentiment_heuristic(self, text: str) -> SentimentType:
+        """Ultra-fast sentiment detection using keyword matching"""
+        text_lower = text.lower()
+        
+        # Positive keywords
+        positive_words = ['love', 'great', 'good', 'excellent', 'amazing', 'wonderful', 
+                         'enjoy', 'happy', 'like', 'best', 'fantastic', 'perfect',
+                         'boost', 'energy', 'helps', 'better', 'improve']
+        
+        # Negative keywords
+        negative_words = ['hate', 'bad', 'terrible', 'awful', 'horrible', 'worst',
+                         'dislike', 'annoying', 'frustrating', 'boring', 'poor',
+                         'jittery', 'anxious', 'crash', 'tired']
+        
+        pos_count = sum(1 for word in positive_words if word in text_lower)
+        neg_count = sum(1 for word in negative_words if word in text_lower)
+        
+        if pos_count > neg_count:
+            return SentimentType.POSITIVE
+        elif neg_count > pos_count:
+            return SentimentType.NEGATIVE
+        else:
+            return SentimentType.NEUTRAL
+
     async def deep_analyze(self, response_text: str, conversation_context: str = "") -> DeepAnalysis:
         """
-        Uses the complex LLM to perform a deep, nuanced analysis of the response.
+        Fast deep analysis - ONLY for good quality responses
+        Skipped for shallow/vague (handled by workflow)
         """
-        parser = JsonOutputParser(pydantic_object=DeepAnalysis)
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are an expert market research analyst. Deeply analyze the user's response.
-
-Return a JSON object with these fields:
-- key_insights: Array of 2-3 specific insights (empty array if response is too shallow)
-- emotional_tone: String describing the emotional tone
-- needs_follow_up: Boolean - true if response is shallow/vague/unclear
-- suggested_follow_up_topic: String with a specific topic to probe, or "None" if not needed
-
-IMPORTANT: Set needs_follow_up to TRUE if:
-- Response is less than 6 words
-- Response lacks specific details or examples
-- Response uses vague language ("maybe", "I guess", "kind of")
-- Response is just "It is good", "Yeah", "Not really", etc.
-
-{format_instructions}"""),
-            ("user", f"Context: {conversation_context}\n\nUser Response: \"{response_text}\"")
-        ])
+        word_count = len(response_text.split())
         
-        chain = prompt | self.complex_llm | parser
-        
-        try:
-            analysis_result = await chain.ainvoke({
-                "format_instructions": parser.get_format_instructions()
-            })
-            return DeepAnalysis(**analysis_result)
-        except Exception as e:
-            print(f"  ⚠️ Deep analysis failed: {e}")
-            # Return a default that triggers follow-up for short responses
-            word_count = len(response_text.split())
+        # Quick heuristic for very short responses
+        if word_count < 6:
             return DeepAnalysis(
                 key_insights=[],
-                emotional_tone="uncertain",
-                needs_follow_up=word_count < 10,
-                suggested_follow_up_topic="details about their response"
+                emotional_tone="brief",
+                needs_follow_up=True,
+                suggested_follow_up_topic="details"
+            )
+        
+        # Fast LLM call with minimal prompt
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Extract 1-2 key insights. Return JSON: {\"key_insights\":[...],\"emotional_tone\":\"...\",\"needs_follow_up\":true|false,\"suggested_follow_up_topic\":\"...\"}"),
+            ("user", f"Response: {response_text}")
+        ])
+        
+        try:
+            result = await (prompt | self.fast_llm).ainvoke({})
+            content = result.content.strip()
+            
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                return DeepAnalysis(**data)
+            else:
+                raise ValueError("No JSON found")
+                
+        except Exception as e:
+            # Fast fallback
+            return DeepAnalysis(
+                key_insights=[],
+                emotional_tone="neutral",
+                needs_follow_up=word_count < 15,
+                suggested_follow_up_topic="more details"
             )
 
     def should_probe(self, analyzed_response: AnalyzedResponse) -> bool:
         """
-        Determines if the conversation should probe deeper based on the initial analysis.
+        DEPRECATED: This logic is now in workflow.py
+        Kept for backwards compatibility.
         """
-        is_shallow_or_vague = analyzed_response.quality in [
-            ResponseQuality.SHALLOW, 
-            ResponseQuality.VAGUE
-        ]
-        
-        if is_shallow_or_vague:
-            print(f"  🎯 PROBE TRIGGERED: Quality is {analyzed_response.quality.value}")
-        
-        return is_shallow_or_vague
+        return analyzed_response.quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]
 
 # Singleton instance
 analyzer = ResponseAnalyzer()

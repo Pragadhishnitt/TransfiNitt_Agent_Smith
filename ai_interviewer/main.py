@@ -11,8 +11,49 @@ from models.schemas import InterviewTemplate, InterviewState, InterviewSummary
 from storage.db_client import db_client
 from storage.redis_client import redis_client
 from templates.template_schemas import TEMPLATE_REGISTRY
-from auth.supabase_auth import get_current_user, get_current_researcher, User
+from auth.supabase_auth import User
 from graph.workflow import interview_workflow, InterviewGraphState
+
+# ========================================================================
+# 🔓 AUTH CONFIGURATION - SET TO False TO DISABLE
+# ========================================================================
+ENABLE_AUTH = False  # ← Change this to True to enable authentication
+
+# ========================================================================
+# MOCK USER FOR TESTING (Used when ENABLE_AUTH = False)
+# ========================================================================
+async def get_mock_user() -> User:
+    """Returns a mock user when auth is disabled"""
+    mock_payload = {
+        "sub": "mock-user-123",
+        "email": "test@example.com", 
+        "role": "researcher",
+        "user_metadata": {"role": "researcher"},
+        "app_metadata": {},
+        "aud": "authenticated",
+        "exp": 9999999999,
+        "iat": 1234567890
+    }
+    return User(mock_payload)
+
+# ========================================================================
+# CONDITIONAL AUTH DEPENDENCIES
+# ========================================================================
+def get_user_dependency():
+    """Returns auth dependency based on ENABLE_AUTH setting"""
+    if ENABLE_AUTH:
+        from auth.supabase_auth import get_current_user
+        return Depends(get_current_user)
+    else:
+        return Depends(get_mock_user)
+
+def get_researcher_dependency():
+    """Returns researcher auth dependency based on ENABLE_AUTH setting"""
+    if ENABLE_AUTH:
+        from auth.supabase_auth import get_current_researcher
+        return Depends(get_current_researcher)
+    else:
+        return Depends(get_mock_user)
 
 # ========================================================================
 # HELPER FUNCTION FOR UUID CONVERSION
@@ -23,13 +64,10 @@ def ensure_valid_uuid(user_id: str) -> str:
     If not, generates a deterministic UUID v5 from the user ID.
     """
     try:
-        # Try to parse as UUID - if successful, return as-is
         uuid.UUID(user_id)
         return user_id
     except ValueError:
-        # Not a valid UUID - create deterministic UUID from user ID
-        import hashlib
-        namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')  # DNS namespace
+        namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
         return str(uuid.uuid5(namespace, user_id))
 
 # ========================================================================
@@ -39,6 +77,11 @@ def ensure_valid_uuid(user_id: str) -> str:
 async def lifespan(app: FastAPI):
     """Handles application startup and shutdown."""
     print("🚀 AI Interviewer Agent API starting up...")
+    
+    if ENABLE_AUTH:
+        print("🔒 Authentication: ENABLED")
+    else:
+        print("🔓 Authentication: DISABLED (using mock user)")
     
     # Seed default templates
     for template_id, template in TEMPLATE_REGISTRY.items():
@@ -77,22 +120,18 @@ app.add_middleware(
 )
 
 # ========================================================================
-# REQUEST/RESPONSE MODELS - UPDATED FOR AUTO-GENERATION
+# REQUEST/RESPONSE MODELS
 # ========================================================================
 
 class StartInterviewRequest(BaseModel):
-    """
-    UPDATED: session_id and template_id are now optional.
-    If not provided, they will be auto-generated.
-    """
-    session_id: Optional[str] = None  # Auto-generated if not provided
-    template_id: Optional[str] = None  # Auto-selected if not provided
+    session_id: Optional[str] = None
+    template_id: Optional[str] = None
     starter_questions: Optional[List[str]] = None
 
 class StartInterviewResponse(BaseModel):
     success: bool
-    session_id: str  # Always returned so client knows the session ID
-    template_id: str  # Always returned so client knows which template was used
+    session_id: str
+    template_id: str
     first_question: str
     audio_url: Optional[str] = None
 
@@ -110,12 +149,12 @@ class ChatResponse(BaseModel):
     next_question: Optional[str] = None
     audio_url: Optional[str] = None
     is_probe: bool = False
-    sentiment: str = "neutral"  # "positive" | "neutral" | "negative"
+    sentiment: str = "neutral"
     progress: ProgressInfo
     is_complete: bool = False
 
 class TranscriptMessage(BaseModel):
-    role: str  # "agent" | "user"
+    role: str
     message: str
     timestamp: str
 
@@ -126,7 +165,7 @@ class EndInterviewResponse(BaseModel):
     success: bool
     transcript: List[TranscriptMessage]
     summary: str
-    sentiment_score: float  # 0.00 to 1.00
+    sentiment_score: float
     key_themes: List[str]
     total_duration_seconds: int
 
@@ -134,9 +173,9 @@ class HealthResponse(BaseModel):
     status: str
     openai_connected: bool
     redis_connected: bool
+    auth_enabled: bool
 
 class TemplateListResponse(BaseModel):
-    """Response for listing available templates"""
     success: bool
     templates: List[Dict[str, Any]]
 
@@ -151,8 +190,6 @@ async def favicon():
 @app.get("/agent/health", response_model=HealthResponse, tags=["Agent"])
 async def health_check():
     """Health check endpoint."""
-    
-    # Check Redis connection
     redis_ok = False
     try:
         redis_client.client.ping()
@@ -160,82 +197,52 @@ async def health_check():
     except Exception:
         pass
     
-    # Check OpenAI/Gemini (we're using Gemini)
-    openai_ok = bool(config.GEMINI_API_KEY)
+    openai_ok = bool(config.CEREBRAS_API_KEY)
     
     return HealthResponse(
         status="ok" if (redis_ok and openai_ok) else "degraded",
         openai_connected=openai_ok,
-        redis_connected=redis_ok
+        redis_connected=redis_ok,
+        auth_enabled=ENABLE_AUTH
     )
 
 @app.get("/agent/templates", response_model=TemplateListResponse, tags=["Agent"])
-async def list_available_templates(current_user: User = Depends(get_current_user)):
-    """
-    NEW ENDPOINT: List all available templates for interview.
-    Client can use this to show template options to the user.
-    """
+async def list_available_templates(current_user: User = get_user_dependency()):
+    """List all available templates."""
     try:
         templates = await db_client.get_all_templates()
-        return TemplateListResponse(
-            success=True,
-            templates=templates
-        )
+        return TemplateListResponse(success=True, templates=templates)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch templates: {str(e)}")
 
 @app.post("/agent/start", response_model=StartInterviewResponse, tags=["Agent"])
 async def start_interview(
-    request: StartInterviewRequest
-    # Removed auth requirement for backend integration
+    request: StartInterviewRequest,
+    current_user: User = get_user_dependency()
 ):
-    """
-    Starts a new interview session.
-    
-    UPDATED: Auto-generates session_id and auto-selects template if not provided.
-    
-    Args:
-        session_id: Optional - Auto-generated UUID if not provided
-        template_id: Optional - First available template if not provided
-        starter_questions: Optional custom starter questions
-    
-    Returns:
-        Session ID, template ID, first question and optional audio URL
-    """
+    """Starts a new interview session."""
     try:
-        # AUTO-GENERATE SESSION ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
-        print(f"📋 Session ID: {session_id} {'(auto-generated)' if not request.session_id else '(provided)'}")
+        print(f"📋 Session ID: {session_id}")
         
-        # AUTO-SELECT TEMPLATE if not provided
         if request.template_id:
             template_id = request.template_id
-            print(f"📝 Using provided template: {template_id}")
         else:
-            # Get first available template
             all_templates = await db_client.get_all_templates()
             if not all_templates:
-                raise HTTPException(
-                    status_code=500, 
-                    detail="No templates available. Please contact administrator."
-                )
+                raise HTTPException(status_code=500, detail="No templates available")
             template_id = all_templates[0]["template_id"]
-            print(f"📝 Auto-selected template: {template_id} ({all_templates[0].get('research_topic', 'Unknown')})")
         
-        # Get template
         template = await db_client.get_template(template_id)
         if not template:
             raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
         
-        # FIX: Use a default respondent_id for backend calls
-        respondent_id = ensure_valid_uuid("demo-respondent")
+        respondent_id = ensure_valid_uuid(str(current_user.id))
         
-        # Use custom starter questions if provided, otherwise use template
         starter_questions = request.starter_questions or template["starter_questions"]
         if not starter_questions:
             raise HTTPException(status_code=400, detail="No starter questions available")
         
-        # Initialize state
         initial_state = InterviewState(
             session_id=session_id,
             respondent_id=respondent_id,
@@ -248,31 +255,24 @@ async def start_interview(
             probe_count=0
         )
         
-        # Get first question
         first_question = starter_questions[0]
         
-        # Add to conversation history
         initial_state.conversation_history.append({
             "role": "assistant",
             "content": first_question
         })
         
-        # Save to database and Redis
         await db_client.save_interview_session(initial_state)
         redis_client.save_conversation_context(session_id, initial_state)
         
-        print(f"✅ Interview started successfully!")
-        print(f"   - Session: {session_id}")
-        print(f"   - Template: {template_id}")
-        print(f"   - Topic: {template['research_topic']}")
-        print(f"   - First Question: {first_question[:80]}...")
+        print(f"✅ Interview started: {session_id}")
         
         return StartInterviewResponse(
             success=True,
-            session_id=session_id,  # Return so client knows the session ID
-            template_id=template_id,  # Return so client knows which template
+            session_id=session_id,
+            template_id=template_id,
             first_question=first_question,
-            audio_url=None  # TODO: Implement TTS if needed
+            audio_url=None
         )
     
     except HTTPException:
@@ -285,42 +285,21 @@ async def start_interview(
 
 @app.post("/agent/chat", response_model=ChatResponse, tags=["Agent"])
 async def chat(
-    request: ChatRequest
-    # Removed auth requirement for backend integration
+    request: ChatRequest,
+    current_user: User = get_user_dependency()
 ):
-    """
-    Main interview loop - processes user message and returns next question.
-    
-    Args:
-        session_id: Session identifier
-        message: User's text response
-        audio_base64: Optional voice input (base64 encoded)
-    
-    Returns:
-        Next question, sentiment, progress, and completion status
-    """
+    """Main interview loop."""
     try:
-        # Get session from Redis
         context = redis_client.get_conversation_context(request.session_id)
         if not context:
-            raise HTTPException(
-                status_code=404, 
-                detail="Interview session not found or expired"
-            )
+            raise HTTPException(status_code=404, detail="Session not found")
         
-        # Skip user verification for backend calls
-        # user_uuid = ensure_valid_uuid(str(current_user.id))
-        # if context.respondent_id != user_uuid:
-        #     raise HTTPException(
-        #         status_code=403, 
-        #         detail="Access denied to this interview session"
-        #     )
+        user_uuid = ensure_valid_uuid(str(current_user.id))
+        if context.respondent_id != user_uuid:
+            raise HTTPException(status_code=403, detail="Access denied")
         
-        # TODO: If audio_base64 provided, transcribe it to text
-        # For now, we use the text message directly
         user_message = request.message
         
-        # Prepare graph input state
         graph_input: InterviewGraphState = {
             "session_id": context.session_id,
             "respondent_id": context.respondent_id,
@@ -337,14 +316,13 @@ async def chat(
             "termination_reason": None,
             "probe_count": context.probe_count,
             "question_count": context.current_question_count,
+            "total_exchanges": len(context.conversation_history),
             "max_questions": context.max_questions,
             "summary": None
         }
         
-        # Run through LangGraph workflow
         final_state = await interview_workflow.ainvoke(graph_input)
         
-        # Extract sentiment from analyzed response
         sentiment = "neutral"
         if final_state.get("analyzed_response"):
             analyzed = final_state["analyzed_response"]
@@ -353,7 +331,6 @@ async def chat(
             elif isinstance(analyzed, dict):
                 sentiment = analyzed.get("sentiment", "neutral")
         
-        # Update Redis with new state
         updated_state = InterviewState(
             session_id=context.session_id,
             respondent_id=context.respondent_id,
@@ -370,19 +347,17 @@ async def chat(
         
         redis_client.save_conversation_context(request.session_id, updated_state)
         
-        # Update database
         await db_client.update_interview_session(
             request.session_id,
             updated_state.model_dump()
         )
         
-        # Prepare response
         is_complete = final_state.get("is_complete", False)
         
         return ChatResponse(
             success=True,
             next_question=final_state.get("current_question"),
-            audio_url=None,  # TODO: Implement TTS if needed
+            audio_url=None,
             is_probe=final_state.get("is_probe", False),
             sentiment=sentiment,
             progress=ProgressInfo(
@@ -402,43 +377,28 @@ async def chat(
 
 @app.post("/agent/end", response_model=EndInterviewResponse, tags=["Agent"])
 async def end_interview(
-    request: EndInterviewRequest
-    # Removed auth requirement for backend integration
+    request: EndInterviewRequest,
+    current_user: User = get_user_dependency()
 ):
-    """
-    Ends the interview and returns transcript and summary.
-    
-    Args:
-        session_id: Session identifier
-    
-    Returns:
-        Full transcript, summary, sentiment score, and key themes
-    """
+    """Ends the interview and returns transcript and summary."""
     try:
-        # Get session from database
         session = await db_client.get_interview_session(request.session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Interview session not found")
         
-        # Skip user verification for backend calls
-        # user_uuid = ensure_valid_uuid(str(current_user.id))
-        # if session.get("respondent_id") != user_uuid:
-        #     raise HTTPException(status_code=403, detail="Access denied")
+        user_uuid = ensure_valid_uuid(str(current_user.id))
+        if session.get("respondent_id") != user_uuid:
+            raise HTTPException(status_code=403, detail="Access denied")
         
-        # Get summary (generate if not exists and interview is complete)
         summary_data = await db_client.get_summary(request.session_id)
         
         if not summary_data:
-            # If no summary exists, generate one now
             context = redis_client.get_conversation_context(request.session_id)
             if not context:
-                # Reconstruct from database
                 context = InterviewState(**session)
             
-            # Get analyzed responses
             analyzed_responses = await db_client.get_analyzed_responses(request.session_id)
             
-            # Generate summary
             from agents.summary import summary_agent
             summary_obj = await summary_agent.generate_summary(
                 context,
@@ -447,15 +407,12 @@ async def end_interview(
                 termination_reason=session.get("termination_reason")
             )
             
-            # Save summary
             await db_client.save_summary(summary_obj)
             summary_data = summary_obj.model_dump()
         
-        # Build transcript from conversation history
         conversation_history = session.get("conversation_history", [])
         transcript = []
         
-        # Calculate start time (approximate)
         created_at = session.get("created_at")
         if isinstance(created_at, str):
             start_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
@@ -471,14 +428,11 @@ async def end_interview(
                 message=msg["content"],
                 timestamp=current_time.isoformat()
             ))
-            # Increment time by ~15 seconds per message (rough estimate)
             from datetime import timedelta
             current_time = current_time + timedelta(seconds=15)
         
-        # Calculate total duration
         total_duration = (current_time - start_time).total_seconds()
         
-        # Calculate sentiment score (0.0 to 1.0)
         sentiment_dist = summary_data.get("sentiment_distribution", {})
         positive = sentiment_dist.get("positive", 0)
         neutral = sentiment_dist.get("neutral", 0)
@@ -486,18 +440,13 @@ async def end_interview(
         total_sentiments = positive + neutral + negative
         
         if total_sentiments > 0:
-            # Weighted score: positive=1.0, neutral=0.5, negative=0.0
             sentiment_score = (positive * 1.0 + neutral * 0.5 + negative * 0.0) / total_sentiments
         else:
-            sentiment_score = 0.5  # Default neutral
+            sentiment_score = 0.5
         
-        # Extract key themes from insights
-        key_themes = summary_data.get("key_insights", [])[:10]  # Top 10
+        key_themes = summary_data.get("key_insights", [])[:10]
         
-        # Mark interview as complete
         await db_client.update_interview_status(request.session_id, "completed")
-        
-        # Clean up Redis
         redis_client.delete_session(request.session_id)
         
         return EndInterviewResponse(
@@ -518,11 +467,11 @@ async def end_interview(
         raise HTTPException(status_code=500, detail=f"Failed to end interview: {str(e)}")
 
 # ========================================================================
-# RESEARCHER ENDPOINTS (LEGACY - Keep for dashboard)
+# RESEARCHER ENDPOINTS
 # ========================================================================
 
 @app.get("/researcher/templates", tags=["Researcher"])
-async def list_templates(current_user: User = Depends(get_current_researcher)):
+async def list_templates(current_user: User = get_researcher_dependency()):
     """Lists all available interview templates."""
     templates = await db_client.get_all_templates()
     return {"success": True, "templates": templates}
@@ -530,7 +479,7 @@ async def list_templates(current_user: User = Depends(get_current_researcher)):
 @app.post("/researcher/templates", tags=["Researcher"])
 async def create_template(
     template: InterviewTemplate,
-    current_user: User = Depends(get_current_researcher)
+    current_user: User = get_researcher_dependency()
 ):
     """Creates a new interview template."""
     template.created_by = ensure_valid_uuid(str(current_user.id))
@@ -546,8 +495,8 @@ async def create_template(
         raise HTTPException(status_code=500, detail=f"Failed to create template: {str(e)}")
 
 @app.get("/researcher/dashboard", tags=["Researcher"])
-async def get_dashboard_analytics(current_user: User = Depends(get_current_researcher)):
-    """Gets aggregate analytics for the researcher's dashboard."""
+async def get_dashboard_analytics(current_user: User = get_researcher_dependency()):
+    """Gets aggregate analytics."""
     try:
         user_uuid = ensure_valid_uuid(str(current_user.id))
         analytics = await db_client.get_researcher_analytics(user_uuid)
@@ -564,7 +513,7 @@ async def get_dashboard_analytics(current_user: User = Depends(get_current_resea
 
 @app.get("/researcher/interviews", tags=["Researcher"])
 async def list_all_interviews(
-    current_user: User = Depends(get_current_researcher),
+    current_user: User = get_researcher_dependency(),
     limit: int = 100
 ):
     """Lists all interviews."""
@@ -575,7 +524,7 @@ async def list_all_interviews(
 @app.get("/researcher/interview/{session_id}/details", tags=["Researcher"])
 async def get_interview_details(
     session_id: str,
-    current_user: User = Depends(get_current_researcher)
+    current_user: User = get_researcher_dependency()
 ):
     """Gets detailed information about a specific interview."""
     session = await db_client.get_interview_session(session_id)

@@ -1,3 +1,5 @@
+# type: ignore
+
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, Optional, List, Dict
 from models.schemas import InterviewState, AnalyzedResponse, ResponseQuality
@@ -9,49 +11,43 @@ from storage.db_client import db_client
 from utils.early_termination import early_termination_detector
 
 # ========================================================================
-# LANGGRAPH STATE DEFINITION - WITH EARLY TERMINATION
+# LANGGRAPH STATE DEFINITION
 # ========================================================================
 class InterviewGraphState(TypedDict):
-    """
-    The state object passed between nodes in the LangGraph workflow.
-    This represents all the data needed to conduct an interview.
-    """
-    # Core identifiers
+    """The state object passed between nodes in the LangGraph workflow."""
     session_id: str
     respondent_id: str
     template_id: str
     research_topic: str
     
-    # Conversation state
     conversation_history: List[Dict[str, str]]
     user_response: str
     current_question: Optional[str]
     
-    # Analysis results
     analyzed_response: Optional[AnalyzedResponse]
     deep_analysis: Optional[DeepAnalysis]
     
-    # Control flags
     is_probe: bool
     is_complete: bool
     should_terminate_early: bool
     termination_reason: Optional[str]
     probe_count: int
     question_count: int
+    total_exchanges: int
     max_questions: int
     
-    # Final output
+    # Track if we need more probing
+    waiting_for_clarification: bool
+    accumulated_insights: List[str]
+    
     summary: Optional[Dict]
 
 # ========================================================================
-# NODE IMPLEMENTATIONS - WITH IMPROVED EARLY TERMINATION
+# NODE IMPLEMENTATIONS
 # ========================================================================
 
 async def analyze_response_node(state: InterviewGraphState) -> Dict:
-    """
-    Step 1: Analyzes the user's response to determine quality and sentiment.
-    NOW WITH COMPREHENSIVE EARLY TERMINATION DETECTION.
-    """
+    """Step 1: Fast analysis with early termination check."""
     user_response = state['user_response']
     print(f"🔍 Analyzing response: {user_response[:80]}...")
     
@@ -61,15 +57,12 @@ async def analyze_response_node(state: InterviewGraphState) -> Dict:
         "content": user_response
     })
     
-    # Perform basic analysis first (we need sentiment for termination check)
+    # Fast analysis
     analyzed = await analyzer.analyze(user_response)
     
-    print(f"  📊 Analysis Result:")
-    print(f"     - Sentiment: {analyzed.sentiment.value}")
-    print(f"     - Quality: {analyzed.quality.value.upper()}")
-    print(f"     - Word Count: {analyzed.word_count}")
+    print(f"  📊 Quality: {analyzed.quality.value} | Sentiment: {analyzed.sentiment.value} | Words: {analyzed.word_count}")
     
-    # CRITICAL: Comprehensive termination check using ALL signals
+    # Check for early termination
     should_exit, exit_reason = early_termination_detector.should_terminate(
         user_response,
         analyzed.sentiment.value,
@@ -77,43 +70,56 @@ async def analyze_response_node(state: InterviewGraphState) -> Dict:
         state["probe_count"]
     )
     
+    current_exchanges = state.get("total_exchanges", 0)
+    
     if should_exit:
-        print(f"🛑 EARLY TERMINATION DETECTED: {exit_reason}")
-        print(f"  📊 Analysis Result (for terminated interview):")
-        print(f"     - Termination Reason: {exit_reason}")
+        print(f"🛑 EARLY TERMINATION: {exit_reason}")
         
         return {
             "analyzed_response": analyzed,
             "conversation_history": state["conversation_history"],
             "should_terminate_early": True,
             "termination_reason": exit_reason,
-            "is_complete": True
+            "is_complete": True,
+            "total_exchanges": current_exchanges + 1,
+            "waiting_for_clarification": False
         }
     
-    # No termination detected - continue normally
-    print(f"  ✅ No exit intent detected - continuing interview")
+    print(f"  ✅ Continuing interview")
     
     return {
         "analyzed_response": analyzed,
         "conversation_history": state["conversation_history"],
         "should_terminate_early": False,
-        "termination_reason": None
+        "termination_reason": None,
+        "total_exchanges": current_exchanges + 1,
+        "waiting_for_clarification": False
     }
 
 async def deep_analysis_node(state: InterviewGraphState) -> Dict:
-    """
-    Step 2: Performs deeper analysis to extract insights.
-    SKIPPED if early termination is flagged.
-    """
+    """Step 2: Deep analysis - ONLY for good quality responses."""
     if state.get("should_terminate_early"):
-        print(f"  ⏭️  Skipping deep analysis - early termination flagged")
-        return {
-            "deep_analysis": None
-        }
+        print(f"  ⭐️ Skipping deep analysis - terminating")
+        return {"deep_analysis": None}
     
-    print(f"🧠 Performing deep analysis...")
+    analyzed = state["analyzed_response"]
     
-    # Get conversation context (last 3 exchanges)
+    # Skip deep analysis for shallow/vague - we'll probe them
+    if analyzed.quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]:
+        print(f"  ⚡ Skipping deep analysis - {analyzed.quality.value} response will be probed")
+        
+        minimal_deep = DeepAnalysis(
+            key_insights=[],
+            emotional_tone="neutral",
+            needs_follow_up=True,
+            suggested_follow_up_topic="more details"
+        )
+        
+        return {"deep_analysis": minimal_deep}
+    
+    # Deep analysis for GOOD responses
+    print(f"🧠 Deep analysis for good response...")
+    
     recent_context = state["conversation_history"][-6:]
     context_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_context])
     
@@ -122,16 +128,14 @@ async def deep_analysis_node(state: InterviewGraphState) -> Dict:
         context_str
     )
     
-    print(f"  💡 Deep Analysis:")
-    print(f"     - Emotional Tone: {deep_analysis_result.emotional_tone}")
-    print(f"     - Needs Follow-up: {deep_analysis_result.needs_follow_up}")
-    print(f"     - Key Insights: {len(deep_analysis_result.key_insights)}")
-    if deep_analysis_result.suggested_follow_up_topic != "None":
-        print(f"     - Follow-up Topic: {deep_analysis_result.suggested_follow_up_topic}")
+    print(f"  💡 Insights: {len(deep_analysis_result.key_insights)}")
     
-    # Add extracted insights to the analyzed response
-    analyzed = state["analyzed_response"]
+    # Add insights
     analyzed.key_insights.extend(deep_analysis_result.key_insights)
+    
+    # Get accumulated insights from probing
+    accumulated = state.get("accumulated_insights", [])
+    analyzed.key_insights.extend(accumulated)
     
     # Save to database
     await db_client.save_analyzed_response(
@@ -142,99 +146,118 @@ async def deep_analysis_node(state: InterviewGraphState) -> Dict:
     
     return {
         "deep_analysis": deep_analysis_result,
-        "analyzed_response": analyzed
+        "analyzed_response": analyzed,
+        "accumulated_insights": []  # Reset after saving
     }
 
-async def probe_node(state: InterviewGraphState) -> Dict:
+async def internal_probe_node(state: InterviewGraphState) -> Dict:
     """
-    Step 3a: Generates a probing question if response was shallow/vague.
+    Step 3a: INTERNAL PROBE with deviation detection and redirection.
+    NEW: Detects if user deviated and redirects back to original question.
     """
-    print(f"⚡ PROBE TRIGGERED - Generating follow-up question...")
-    print(f"   Current probe count: {state['probe_count']}")
+    print(f"⚡ INTERNAL PROBE (Count: {state['probe_count']})")
     
-    # Get the original question that was asked
+    # Get the original question (the MAIN question, not a probe)
     original_question = None
-    for msg in reversed(state["conversation_history"]):
-        if msg["role"] == "assistant":
-            original_question = msg["content"]
-            break
     
+    # Walk backwards through conversation to find the last main question
+    # (skip any probe questions)
+    for i in range(len(state["conversation_history"]) - 1, -1, -1):
+        msg = state["conversation_history"][i]
+        if msg["role"] == "assistant":
+            # This might be a probe or a main question
+            # We want the FIRST assistant message we encounter going backwards
+            # But we need to skip if this is a probe
+            
+            # Simple heuristic: If this is the first assistant message OR
+            # if we've gone back far enough (more than 2 messages), it's the main question
+            if i == 0 or len(state["conversation_history"]) - i > 4:
+                original_question = msg["content"]
+                break
+            # Otherwise, keep looking for the original question
+            original_question = msg["content"]  # Keep updating as we go back
+    
+    # If we can't find it, use a generic
+    if not original_question:
+        original_question = f"the topic of {state['research_topic']}"
+    
+    print(f"   📝 Original question: {original_question[:50]}...")
+    
+    # Generate probe with deviation detection
     probe_question = await probe_agent.generate_probe_question(
-        original_question=original_question or "",
+        original_question=original_question,
         user_response=state["user_response"],
         topic=state["deep_analysis"].suggested_follow_up_topic if state.get("deep_analysis") else "details",
         research_topic=state["research_topic"],
         conversation_history=state["conversation_history"]
     )
     
-    print(f"   ✅ Probe question generated: {probe_question[:100]}...")
+    print(f"   ✅ Probe: {probe_question[:80]}...")
     
-    # Update conversation history
+    # Add probe to conversation history
     new_history = state["conversation_history"].copy()
     new_history.append({"role": "assistant", "content": probe_question})
+    
+    # Extract any insights from this shallow response
+    accumulated = state.get("accumulated_insights", [])
+    if state["analyzed_response"].key_insights:
+        accumulated.extend(state["analyzed_response"].key_insights)
     
     return {
         "current_question": probe_question,
         "conversation_history": new_history,
         "probe_count": state["probe_count"] + 1,
-        "is_probe": True
+        "is_probe": True,
+        "total_exchanges": state["total_exchanges"] + 1,
+        "waiting_for_clarification": True,
+        "accumulated_insights": accumulated
     }
 
 async def generate_question_node(state: InterviewGraphState) -> Dict:
-    """
-    Step 3b: Generates the next main interview question.
-    """
-    print(f"📝 Generating next question (Q{state['question_count'] + 1})...")
+    """Step 3b: Generate next main question."""
+    next_q_number = state["question_count"] + 1
+    print(f"📝 Generating Question {next_q_number}/{state['max_questions']}...")
     
-    # Get all insights so far
+    # Get insights for context
     all_insights = await db_client.get_all_insights_for_session(state["session_id"])
     
-    # Create a temporary InterviewState for the interviewer agent
     temp_state = InterviewState(
         session_id=state["session_id"],
         respondent_id=state["respondent_id"],
         template_id=state["template_id"],
         research_topic=state["research_topic"],
         conversation_history=state["conversation_history"],
-        current_question_count=state["question_count"],
+        current_question_count=next_q_number,
         max_questions=state["max_questions"]
     )
     
     next_question = await interviewer_agent.generate_next_question(temp_state, all_insights)
     
-    print(f"   ✅ Next question: {next_question[:100]}...")
+    print(f"   ✅ Q{next_q_number}: {next_question[:80]}...")
     
-    # Update conversation history
     new_history = state["conversation_history"].copy()
     new_history.append({"role": "assistant", "content": next_question})
     
     return {
         "current_question": next_question,
         "conversation_history": new_history,
-        "question_count": state["question_count"] + 1,
+        "question_count": next_q_number,
         "probe_count": 0,  # Reset probe count for new question
-        "is_probe": False
+        "is_probe": False,
+        "total_exchanges": state["total_exchanges"] + 1,
+        "waiting_for_clarification": False,
+        "accumulated_insights": []
     }
 
 async def generate_summary_node(state: InterviewGraphState) -> Dict:
-    """
-    Step 4: Generates the final summary when interview is complete.
-    UPDATED to handle both normal completion and early termination.
-    """
+    """Step 4: Generate final summary."""
     is_early = state.get("should_terminate_early", False)
     
-    if is_early:
-        print(f"📊 Generating EARLY TERMINATION summary...")
-        print(f"   Reason: {state.get('termination_reason', 'unknown')}")
-        print(f"   Questions completed: {state['question_count']}/{state['max_questions']}")
-    else:
-        print(f"📊 Generating final summary...")
-        print(f"   Total questions: {state['question_count']}")
+    print(f"📊 Generating {'EARLY TERMINATION' if is_early else 'FINAL'} summary...")
+    print(f"   Questions: {state['question_count']}/{state['max_questions']}")
     
-    # Get all analyzed responses
     all_analyzed_responses = await db_client.get_analyzed_responses(state["session_id"])
     
-    # Create InterviewState for summary generation
     final_state = InterviewState(
         session_id=state["session_id"],
         respondent_id=state["respondent_id"],
@@ -248,7 +271,6 @@ async def generate_summary_node(state: InterviewGraphState) -> Dict:
         termination_reason=state.get('termination_reason')
     )
     
-    # Generate summary with early termination context
     summary = await summary_agent.generate_summary(
         final_state, 
         all_analyzed_responses,
@@ -256,10 +278,8 @@ async def generate_summary_node(state: InterviewGraphState) -> Dict:
         termination_reason=state.get('termination_reason')
     )
     
-    # Save to database
     await db_client.save_summary(summary)
     
-    # Update interview status
     status = "terminated_early" if is_early else "completed"
     await db_client.update_interview_status(state["session_id"], status)
     
@@ -269,70 +289,62 @@ async def generate_summary_node(state: InterviewGraphState) -> Dict:
     }
 
 # ========================================================================
-# CONDITIONAL EDGES (ROUTING LOGIC) - WITH IMPROVED TERMINATION
+# CONDITIONAL EDGES - UPDATED FOR MAX 1 PROBE
 # ========================================================================
 
 def should_probe(state: InterviewGraphState) -> str:
     """
-    Decides whether to probe deeper or move to next question.
+    Decides whether to probe internally or move to next question.
     
-    CRITICAL: Checks for early termination FIRST before any probing logic.
+    NEW RULE: MAX 1 PROBE per question (changed from 2).
+    After 1 probe, we ALWAYS move to next question.
     """
-    # HIGHEST PRIORITY: Check for early termination
+    # Priority 1: Early termination
     if state.get("should_terminate_early"):
-        print(f"\n  🛑 EARLY TERMINATION DETECTED")
-        print(f"     Reason: {state.get('termination_reason')}")
-        print(f"  ➡️ ROUTING TO: TERMINATE → SUMMARY")
+        print(f"\n  🛑 TERMINATE → SUMMARY")
         return "terminate"
     
     analyzed = state["analyzed_response"]
     deep = state.get("deep_analysis")
     probe_count = state["probe_count"]
     
-    # Check multiple conditions for probing
-    quality_says_probe = analyzed.quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]
-    deep_says_probe = deep and deep.needs_follow_up
-    can_probe = probe_count < 2  # Max 2 consecutive probes
+    # Priority 2: Max 1 probe reached - FORCE next question
+    if probe_count >= 1:
+        print(f"\n  ⭐️ MAX PROBE (1) REACHED → FORCE NEXT QUESTION")
+        # Save whatever insights we have and move on
+        return "next_question"
     
-    print(f"\n  🎯 PROBE DECISION:")
-    print(f"     - Quality: {analyzed.quality.value} → Probe? {quality_says_probe}")
-    print(f"     - Deep Analysis: needs_follow_up={deep_says_probe if deep else 'N/A'}")
-    print(f"     - Probe Count: {probe_count}/2")
-    print(f"     - Can Probe: {can_probe}")
+    # Priority 3: Check if response needs probing
+    quality_needs_probe = analyzed.quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]
+    deep_needs_probe = deep and deep.needs_follow_up
     
-    # Probe if EITHER quality OR deep analysis says we should AND we can still probe
-    should_probe_decision = (quality_says_probe or deep_says_probe) and can_probe
+    should_probe_decision = quality_needs_probe or deep_needs_probe
     
-    if should_probe_decision:
-        print(f"  ➡️ ROUTING TO: PROBE ⚡")
+    print(f"\n  🎯 Quality: {analyzed.quality.value} | Needs probe: {should_probe_decision} | Probes: {probe_count}/1")
+    
+    if should_probe_decision and probe_count == 0:
+        print(f"  ➡️  INTERNAL PROBE ⚡ (will detect deviation & redirect if needed)")
         return "probe"
     else:
-        reason = "max probes reached" if not can_probe else "response is good quality"
-        print(f"  ➡️ ROUTING TO: NEXT_QUESTION ({reason})")
+        print(f"  ➡️  GOOD RESPONSE or MAX PROBES → NEXT QUESTION 📝")
         return "next_question"
 
 def should_continue(state: InterviewGraphState) -> str:
-    """
-    Decides whether to continue the interview or generate summary.
-    
-    CRITICAL: Checks for early termination before checking question count.
-    """
-    # HIGHEST PRIORITY: Check for early termination
+    """Decides whether to continue or generate summary."""
     if state.get("should_terminate_early"):
-        print(f"\n  🛑 EARLY TERMINATION - Going directly to summary")
+        print(f"\n  🛑 EARLY TERMINATION → SUMMARY")
         return "summary"
     
     current_count = state["question_count"]
     max_count = state["max_questions"]
     
-    print(f"\n  📈 CONTINUATION CHECK:")
-    print(f"     - Questions: {current_count}/{max_count}")
+    print(f"\n  📊 Progress: {current_count}/{max_count} questions")
     
     if current_count >= max_count:
-        print(f"  ➡️ ROUTING TO: SUMMARY 📊 (Max questions reached)")
+        print(f"  ➡️  COMPLETE → SUMMARY 📊")
         return "summary"
     
-    print(f"  ➡️ ROUTING TO: CONTINUE (END - waiting for user)")
+    print(f"  ➡️  CONTINUE → WAIT FOR USER")
     return "continue"
 
 # ========================================================================
@@ -340,48 +352,38 @@ def should_continue(state: InterviewGraphState) -> str:
 # ========================================================================
 
 def build_interview_workflow():
-    """
-    Builds and compiles the LangGraph workflow for interview management.
-    
-    Flow with Improved Early Termination:
-    1. User responds → analyze_response (comprehensive termination check!)
-    2. → deep_analysis (skipped if terminating early)
-    3. → [Decision] terminate OR probe OR generate_question
-    4. → [If terminate] generate_summary (with early termination context)
-    5. → [If probe] END (wait for next user input)
-    6. → [If question] check if complete → summary OR END
-    """
+    """Builds the interview workflow with MAX 1 PROBE and deviation detection."""
     
     workflow = StateGraph(InterviewGraphState)
     
-    # Add all nodes
+    # Add nodes
     workflow.add_node("analyze_response", analyze_response_node)
     workflow.add_node("deep_analysis", deep_analysis_node)
-    workflow.add_node("probe", probe_node)
+    workflow.add_node("internal_probe", internal_probe_node)
     workflow.add_node("generate_question", generate_question_node)
     workflow.add_node("generate_summary", generate_summary_node)
     
     # Set entry point
     workflow.set_entry_point("analyze_response")
     
-    # Define the flow
+    # Flow
     workflow.add_edge("analyze_response", "deep_analysis")
     
-    # After deep analysis, decide to terminate, probe, or continue
+    # After deep analysis, decide: terminate, probe, or next question
     workflow.add_conditional_edges(
         "deep_analysis",
         should_probe,
         {
             "terminate": "generate_summary",
-            "probe": "probe",
+            "probe": "internal_probe",
             "next_question": "generate_question"
         }
     )
     
-    # After probe, END and wait for user's next response
-    workflow.add_edge("probe", END)
+    # Internal probe returns to user via END
+    workflow.add_edge("internal_probe", END)
     
-    # After generating question, check if interview is complete
+    # After generating next question, check if complete
     workflow.add_conditional_edges(
         "generate_question",
         should_continue,
@@ -391,7 +393,6 @@ def build_interview_workflow():
         }
     )
     
-    # After summary, END
     workflow.add_edge("generate_summary", END)
     
     return workflow.compile()
@@ -401,10 +402,8 @@ def build_interview_workflow():
 # ========================================================================
 interview_workflow = build_interview_workflow()
 
-print("✅ LangGraph workflow compiled successfully!")
-print("   Flow: analyze → deep_analysis → [terminate OR probe OR next_question] → [summary OR continue]")
-print("   ⚡ Early termination support: ENHANCED")
-print("      - Detects explicit exit phrases: 'end this', 'stop', 'conclude'")
-print("      - Detects negative emotions: 'uncomfortable', 'frustrated'")
-print("      - Detects repeated dismissive responses: 'yeah', 'ok', 'whatever'")
-print("      - Detects probe fatigue: too many probes with short responses")
+print("✅ LangGraph workflow compiled!")
+print("   📊 MAX PROBES: 1 per question")
+print("   🔄 DEVIATION DETECTION: Enabled")
+print("   ➡️  Deviation behavior: 'That's great! Now back to [original question]'")
+print("   Flow: analyze → deep_analysis → [terminate OR probe OR next_question]")

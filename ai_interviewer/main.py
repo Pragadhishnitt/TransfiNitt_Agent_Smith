@@ -186,8 +186,8 @@ async def list_available_templates(current_user: User = Depends(get_current_user
 
 @app.post("/agent/start", response_model=StartInterviewResponse, tags=["Agent"])
 async def start_interview(
-    request: StartInterviewRequest,
-    current_user: User = Depends(get_current_user)
+    request: StartInterviewRequest
+    # Removed auth requirement for backend integration
 ):
     """
     Starts a new interview session.
@@ -227,8 +227,8 @@ async def start_interview(
         if not template:
             raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
         
-        # FIX: Ensure respondent_id is a valid UUID
-        respondent_id = ensure_valid_uuid(str(current_user.id))
+        # FIX: Use a default respondent_id for backend calls
+        respondent_id = ensure_valid_uuid("demo-respondent")
         
         # Use custom starter questions if provided, otherwise use template
         starter_questions = request.starter_questions or template["starter_questions"]
@@ -285,8 +285,8 @@ async def start_interview(
 
 @app.post("/agent/chat", response_model=ChatResponse, tags=["Agent"])
 async def chat(
-    request: ChatRequest,
-    current_user: User = Depends(get_current_user)
+    request: ChatRequest
+    # Removed auth requirement for backend integration
 ):
     """
     Main interview loop - processes user message and returns next question.
@@ -308,13 +308,13 @@ async def chat(
                 detail="Interview session not found or expired"
             )
         
-        # Verify user owns this session
-        user_uuid = ensure_valid_uuid(str(current_user.id))
-        if context.respondent_id != user_uuid:
-            raise HTTPException(
-                status_code=403, 
-                detail="Access denied to this interview session"
-            )
+        # Skip user verification for backend calls
+        # user_uuid = ensure_valid_uuid(str(current_user.id))
+        # if context.respondent_id != user_uuid:
+        #     raise HTTPException(
+        #         status_code=403, 
+        #         detail="Access denied to this interview session"
+        #     )
         
         # TODO: If audio_base64 provided, transcribe it to text
         # For now, we use the text message directly
@@ -402,8 +402,8 @@ async def chat(
 
 @app.post("/agent/end", response_model=EndInterviewResponse, tags=["Agent"])
 async def end_interview(
-    request: EndInterviewRequest,
-    current_user: User = Depends(get_current_user)
+    request: EndInterviewRequest
+    # Removed auth requirement for backend integration
 ):
     """
     Ends the interview and returns transcript and summary.
@@ -420,10 +420,10 @@ async def end_interview(
         if not session:
             raise HTTPException(status_code=404, detail="Interview session not found")
         
-        # Verify user owns this session
-        user_uuid = ensure_valid_uuid(str(current_user.id))
-        if session.get("respondent_id") != user_uuid:
-            raise HTTPException(status_code=403, detail="Access denied")
+        # Skip user verification for backend calls
+        # user_uuid = ensure_valid_uuid(str(current_user.id))
+        # if session.get("respondent_id") != user_uuid:
+        #     raise HTTPException(status_code=403, detail="Access denied")
         
         # Get summary (generate if not exists and interview is complete)
         summary_data = await db_client.get_summary(request.session_id)
@@ -622,6 +622,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8000,
+        port=8001,
         log_level="info"
     )

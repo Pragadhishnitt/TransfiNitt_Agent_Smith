@@ -27,10 +27,18 @@ const ChatInterface = ({ sessionId, onComplete }) => {
       setIsLoading(true);
       const response = await interviewAPI.startInterview(sessionId);
       if (response.success && response.first_question) {
+        // Handle both string format (from backend) and object format (from dummy data)
+        const questionText = typeof response.first_question === 'string' 
+          ? response.first_question 
+          : response.first_question.text;
+        const questionId = typeof response.first_question === 'string' 
+          ? "q1" 
+          : response.first_question.question_id;
+          
         setMessages([{
           type: 'assistant',
-          text: response.first_question.text,
-          id: response.first_question.question_id
+          text: questionText,
+          id: questionId
         }]);
         setProgress(response.progress || { current: 1, total: 5 });
       }
@@ -64,10 +72,14 @@ const ChatInterface = ({ sessionId, onComplete }) => {
       if (response.is_complete) {
         onComplete(response);
       } else {
+        // Handle both string format (from backend) and object format (from dummy data)
+        const questionText = response.next_question || response.response?.text;
+        const questionId = response.response?.question_id || `q${Date.now()}`;
+        
         setMessages(prev => [...prev, {
           type: 'assistant',
-          text: response.response.text,
-          id: response.response.question_id
+          text: questionText,
+          id: questionId
         }]);
         setProgress(response.progress);
       }

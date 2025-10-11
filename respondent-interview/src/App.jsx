@@ -19,7 +19,7 @@ function App() {
     const id = pathParts[pathParts.length - 1];
     
     // Use dummy session if no valid ID in URL
-    const defaultSessionId = 'dummy-session-123';
+    const defaultSessionId = '27913302-73f4-482c-8ede-96b1291c5198';
     const validId = id && id !== '' ? id : defaultSessionId;
     
     setSessionId(validId);

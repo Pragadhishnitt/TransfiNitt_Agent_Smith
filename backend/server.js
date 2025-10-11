@@ -12,7 +12,11 @@ const PORT = process.env.PORT || 8000;
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5174',
+  credentials: true,  
+}
+));
 app.use(express.json());
 
 // Helper functions
@@ -590,6 +594,7 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
 // RESPONDENTS ROUTES
 // ============================================
 
+// Get all respondents
 app.get('/api/respondents', verifyToken, async (req, res) => {
   try {
     const respondents = await prisma.respondent.findMany({
@@ -618,6 +623,295 @@ app.get('/api/respondents', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     error(res, 'SERVER_ERROR', 'Failed to fetch respondents', 500);
+  }
+});
+
+// Get single respondent
+app.get('/api/respondents/:id', verifyToken, async (req, res) => {
+  try {
+    const respondent = await prisma.respondent.findUnique({
+      where: { id: req.params.id },
+      include: {
+        user: {
+          select: { email: true }
+        },
+        incentives: {
+          include: {
+            session: {
+              include: {
+                template: {
+                  select: { title: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!respondent) {
+      return error(res, 'NOT_FOUND', 'Respondent not found', 404);
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: { respondent_id: respondent.user_id },
+      include: {
+        template: {
+          select: { title: true }
+        }
+      }
+    });
+
+    success(res, {
+      respondent: {
+        id: respondent.id,
+        name: respondent.name,
+        email: respondent.user.email,
+        demographics: respondent.demographics,
+        participation_count: respondent.participation_count,
+        total_incentives: respondent.total_incentives ? parseFloat(respondent.total_incentives) : 0,
+        avg_sentiment: respondent.avg_sentiment ? parseFloat(respondent.avg_sentiment) : null,
+        behavior_tags: respondent.behavior_tags || [],
+        sessions: sessions.map(s => ({
+          id: s.id,
+          template_title: s.template.title,
+          completed_at: s.completed_at,
+          sentiment_score: s.sentiment_score ? parseFloat(s.sentiment_score) : null
+        }))
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch respondent', 500);
+  }
+});
+
+// Add respondent to panel
+app.post('/api/respondents', verifyToken, async (req, res) => {
+  try {
+    const { name, email, demographics } = req.body;
+
+    if (!name || !email) {
+      return error(res, 'INVALID_INPUT', 'Name and email required');
+    }
+
+    // Create or get user
+    let user = await prisma.user.findUnique({ where: { email } });
+    
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          password_hash: await hashPassword(crypto.randomBytes(16).toString('hex')),
+          role: 'respondent'
+        }
+      });
+    }
+
+    // Check if respondent already exists
+    const existingRespondent = await prisma.respondent.findUnique({
+      where: { user_id: user.id }
+    });
+
+    if (existingRespondent) {
+      return error(res, 'ALREADY_EXISTS', 'Respondent already in panel');
+    }
+
+    const respondent = await prisma.respondent.create({
+      data: {
+        user_id: user.id,
+        name,
+        demographics: demographics || {}
+      }
+    });
+
+    success(res, { respondent });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to add respondent', 500);
+  }
+});
+
+// ============================================
+// INCENTIVES ROUTES
+// ============================================
+
+// Get pending incentives
+app.get('/api/incentives/pending', verifyToken, async (req, res) => {
+  try {
+    const incentives = await prisma.incentive.findMany({
+      where: { status: 'pending' },
+      include: {
+        respondent: {
+          include: {
+            user: {
+              select: { email: true }
+            }
+          }
+        },
+        session: {
+          select: { id: true }
+        }
+      }
+    });
+
+    const formattedIncentives = incentives.map(i => ({
+      id: i.id,
+      respondent: {
+        id: i.respondent.id,
+        name: i.respondent.name,
+        email: i.respondent.user.email
+      },
+      session_id: i.session_id,
+      amount: parseFloat(i.amount),
+      status: i.status
+    }));
+
+    success(res, { incentives: formattedIncentives });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch incentives', 500);
+  }
+});
+
+// Pay incentive
+app.post('/api/incentives/:id/pay', verifyToken, async (req, res) => {
+  try {
+    const incentive = await prisma.incentive.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'paid',
+        paid_at: new Date()
+      }
+    });
+
+    success(res, {
+      incentive: {
+        id: incentive.id,
+        status: incentive.status,
+        paid_at: incentive.paid_at
+      }
+    });
+  } catch (err) {
+    if (err.code === 'P2025') {
+      return error(res, 'NOT_FOUND', 'Incentive not found', 404);
+    }
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to pay incentive', 500);
+  }
+});
+
+// ============================================
+// SURVEY GENERATION ROUTE
+// ============================================
+
+app.post('/api/surveys/generate', verifyToken, async (req, res) => {
+  try {
+    const { template_id, session_ids } = req.body;
+
+    if (!template_id) {
+      return error(res, 'INVALID_INPUT', 'template_id required');
+    }
+
+    // Get sessions to analyze
+    const whereClause = {
+      template_id,
+      status: 'completed'
+    };
+
+    if (session_ids && session_ids.length > 0) {
+      whereClause.id = { in: session_ids };
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: whereClause,
+      select: {
+        summary: true,
+        key_themes: true,
+        transcript: true
+      }
+    });
+
+    if (sessions.length === 0) {
+      return error(res, 'NO_DATA', 'No completed sessions found');
+    }
+
+    // Extract all themes
+    const allThemes = [];
+    sessions.forEach(s => {
+      if (s.key_themes && Array.isArray(s.key_themes)) {
+        allThemes.push(...s.key_themes);
+      }
+    });
+
+    // Count theme frequency
+    const themeCounts = {};
+    allThemes.forEach(theme => {
+      themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+    });
+
+    // Get top 5 themes
+    const topThemes = Object.entries(themeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([theme]) => theme);
+
+    // Generate survey questions based on themes
+    const questions = [
+      {
+        type: 'scale',
+        question: `On a scale of 1-5, how important is ${topThemes[0] || 'this topic'} to you?`,
+        options: [1, 2, 3, 4, 5]
+      }
+    ];
+
+    topThemes.slice(1).forEach(theme => {
+      questions.push({
+        type: 'multiple_choice',
+        question: `How would you rate your experience with ${theme}?`,
+        options: ['Very satisfied', 'Satisfied', 'Neutral', 'Dissatisfied', 'Very dissatisfied']
+      });
+    });
+
+    success(res, { questions });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to generate survey', 500);
+  }
+});
+
+// ============================================
+// GET TRANSCRIPT (After completion)
+// ============================================
+
+app.get('/api/interviews/:session_id/transcript', async (req, res) => {
+  try {
+    const session = await prisma.session.findUnique({
+      where: { id: req.params.session_id },
+      select: {
+        status: true,
+        transcript: true,
+        summary: true,
+        duration_seconds: true
+      }
+    });
+
+    if (!session) {
+      return error(res, 'NOT_FOUND', 'Interview not found', 404);
+    }
+
+    if (session.status !== 'completed') {
+      return error(res, 'NOT_COMPLETED', 'Interview not yet completed');
+    }
+
+    success(res, {
+      transcript: session.transcript || [],
+      summary: session.summary,
+      duration_seconds: session.duration_seconds
+    });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch transcript', 500);
   }
 });
 

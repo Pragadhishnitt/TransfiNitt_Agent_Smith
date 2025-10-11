@@ -34,7 +34,7 @@ export const dummyResponses = {
         description: "Help us understand your coffee drinking habits and preferences. This survey takes about 5 minutes to complete."
       },
       estimated_duration_minutes: 5,
-      incentive_amount: 5.00
+      expected_incentive: 5.00
     }
   },
 

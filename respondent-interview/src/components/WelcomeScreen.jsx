@@ -47,7 +47,7 @@ const WelcomeScreen = ({ interviewDetails, onStart }) => {
             <div className="detail-icon">💰</div>
             <div className="detail-content">
               <span className="detail-label">Reward: </span>
-              <span className="detail-value">${interviewDetails.incentive_amount.toFixed(2)}</span>
+              <span className="detail-value">${interviewDetails.expected_incentive.toFixed(2)}</span>
             </div>
           </div>
         </div>

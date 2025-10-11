@@ -56,6 +56,7 @@ export const sessionsAPI = {
   getAll: (params = {}) => api.get('/sessions', { params }),
   getById: (id) => api.get(`/sessions/${id}`),
   start: (sessionData) => api.post('/sessions/start', sessionData),
+  create: (sessionData) => api.post('/sessions/create', sessionData),
 };
 
 // Respondents API

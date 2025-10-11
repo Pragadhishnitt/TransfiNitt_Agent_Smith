@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const { PrismaClient } = require('./generated/prisma');
 const { generateToken, verifyToken, hashPassword, comparePassword } = require('./auth');
 
@@ -20,6 +21,171 @@ app.use(cors({
 }
 ));
 app.use(express.json());
+
+// ============================================
+// EMAIL CONFIGURATION
+// ============================================
+
+// Create email transporter with Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_APP_PASSWORD
+  }
+});
+
+// Verify transporter configuration
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('Email transporter verification failed:', error);
+  } else {
+    console.log('✅ Email service ready');
+  }
+});
+
+// Send interview invitation email
+const sendInterviewInvitation = async (recipientEmail, recipientName, interviewLink, templateTitle) => {
+  const mailOptions = {
+    from: `"Interview Platform" <${process.env.EMAIL_USER}>`,
+    to: recipientEmail,
+    subject: `You're invited: ${templateTitle}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; background: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; }
+          .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎤 Interview Invitation</h1>
+          </div>
+          <div class="content">
+            <p>Hello ${recipientName || 'there'},</p>
+            <p>You've been invited to participate in an interview session:</p>
+            <p><strong>${templateTitle}</strong></p>
+            <p>This is a conversational interview that typically takes about 10-15 minutes. Your insights are valuable and will help us understand your perspective better.</p>
+            <p style="text-align: center;">
+              <a href="${interviewLink}" class="button">Start Interview</a>
+            </p>
+            <p><strong>What to expect:</strong></p>
+            <ul>
+              <li>A friendly conversational experience</li>
+              <li>Estimated duration: 10-15 minutes</li>
+              <li>Incentive: $5.00 upon completion</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              Interview Link: <a href="${interviewLink}">${interviewLink}</a>
+            </p>
+          </div>
+          <div class="footer">
+            <p>This interview link is unique to you. Please do not share it with others.</p>
+            <p>© 2025 Interview Platform. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `
+      Hello ${recipientName || 'there'},
+      
+      You've been invited to participate in an interview session: ${templateTitle}
+      
+      Click the link below to start:
+      ${interviewLink}
+      
+      This interview typically takes 10-15 minutes and you'll receive $5.00 upon completion.
+      
+      What to expect:
+      - A friendly conversational experience
+      - Estimated duration: 10-15 minutes
+      - Incentive: $5.00 upon completion
+      
+      This link is unique to you. Please do not share it with others.
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+};
+
+// Send completion confirmation email
+const sendCompletionEmail = async (recipientEmail, recipientName, templateTitle, incentiveAmount) => {
+  const mailOptions = {
+    from: `"Interview Platform" <${process.env.EMAIL_USER}>`,
+    to: recipientEmail,
+    subject: '✅ Interview Completed - Thank You!',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+          .highlight { background: #dcfce7; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
+          .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Thank You!</h1>
+          </div>
+          <div class="content">
+            <p>Hello ${recipientName || 'there'},</p>
+            <p>Thank you for completing the interview session: <strong>${templateTitle}</strong></p>
+            <div class="highlight">
+              <h2 style="margin: 0; color: #059669;">$${incentiveAmount.toFixed(2)} Incentive</h2>
+              <p style="margin: 10px 0 0 0; color: #047857;">Your incentive is being processed</p>
+            </div>
+            <p>Your insights are incredibly valuable and will contribute to meaningful research. We appreciate the time you took to share your thoughts.</p>
+            <p>You can view your transcript and session details in your dashboard.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Interview Platform. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `
+      Hello ${recipientName || 'there'},
+      
+      Thank you for completing the interview session: ${templateTitle}
+      
+      Your $${incentiveAmount.toFixed(2)} incentive is being processed.
+      
+      Your insights are incredibly valuable and will contribute to meaningful research.
+      
+      Thank you for your participation!
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Completion email sent:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending completion email:', error);
+    throw error;
+  }
+};
 
 // Helper functions
 const success = (res, data) => res.json({ success: true, ...data });
@@ -298,16 +464,28 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
 
     console.log('Available respondents found:', availableRespondents.length);
 
-    const respondentIds = availableRespondents.map(respondent => ({
+    const respondentUserIds = availableRespondents.map(respondent => ({
       id: respondent.id,
       email: respondent.email,
       created_at: respondent.created_at
     }));
 
+    const respondentAllIds = (await Promise.all(
+      respondentUserIds.map(async r => ({
+        id: await prisma.respondent.findUnique({
+          where: { user_id: r.id }
+        }).then(resp => resp ? resp.id : null),
+        email: r.email,
+        created_at: r.created_at
+      }))
+    ));
+
+    const respondentIds = respondentAllIds.filter(r => r.id !== null && r.id !== undefined);
+
     success(res, { 
       template_id: templateId,
       available_respondent_ids: respondentIds,
-      total_available: availableRespondents.length,
+      total_available: respondentIds.length,
       total_attended: attendedRespondentIds.length
     });
   } catch (err) {
@@ -320,10 +498,10 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
 // SESSIONS ROUTES (Protected - for researchers)
 // ============================================
 
-// Create new interview session (generate link)
+// Create new interview session (generate link) - WITH EMAIL SUPPORT
 app.post('/api/sessions/create', verifyToken, async (req, res) => {
   try {
-    const { template_id, respondent_name, respondent_email } = req.body;
+    const { template_id, respondent_name, respondent_email, send_email } = req.body;
 
     if (!template_id) {
       return error(res, 'INVALID_INPUT', 'template_id required');
@@ -378,11 +556,32 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
       }
     });
 
+    const interviewLink = `http://localhost:5174/interview/${session.id}`;
+
+    // Send email if requested and email is provided
+    let emailSent = false;
+    if (send_email && respondent_email) {
+      try {
+        await sendInterviewInvitation(
+          respondent_email,
+          respondent_name || respondent_email.split('@')[0],
+          interviewLink,
+          template.title
+        );
+        emailSent = true;
+        console.log(`✉️  Interview invitation sent to ${respondent_email}`);
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+        // Don't fail the entire request if email fails
+      }
+    }
+
     success(res, {
       session_id: session.id,
-      link_code: session.id, // Using session ID as link code for simplicity
-      interview_link: `http://localhost:5174/interview/${session.id}`,
-      assigned_to: respondent_name || respondent_email || 'Anonymous'
+      link_code: session.id,
+      interview_link: interviewLink,
+      assigned_to: respondent_name || respondent_email || 'Anonymous',
+      email_sent: emailSent
     });
   } catch (err) {
     console.error(err);
@@ -615,14 +814,22 @@ app.post('/api/interviews/:session_id/start', async (req, res) => {
   }
 });
 
-// Send message (interview loop)
+// Send message (interview loop) - WITH COMPLETION EMAIL
 app.post('/api/interviews/:session_id/message', async (req, res) => {
   try {
     const { message } = req.body;
     const { session_id } = req.params;
 
     const session = await prisma.session.findUnique({
-      where: { id: session_id }
+      where: { id: session_id },
+      include: {
+        respondent: {
+          select: { email: true }
+        },
+        template: {
+          select: { title: true }
+        }
+      }
     });
 
     if (!session) {
@@ -660,6 +867,21 @@ app.post('/api/interviews/:session_id/message', async (req, res) => {
             duration_seconds: endResponse.data.total_duration_seconds
           }
         });
+
+        // Send completion email if valid email
+        if (session.respondent.email && !session.respondent.email.includes('@temp.com')) {
+          try {
+            await sendCompletionEmail(
+              session.respondent.email,
+              session.respondent.email.split('@')[0],
+              session.template.title,
+              5.00
+            );
+            console.log(`✉️  Completion email sent to ${session.respondent.email}`);
+          } catch (emailError) {
+            console.error('Failed to send completion email:', emailError);
+          }
+        }
 
         return success(res, {
           is_complete: true,

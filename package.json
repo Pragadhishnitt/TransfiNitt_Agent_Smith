@@ -1,7 +1,8 @@
 {
   "dependencies": {
-    "lucide-react": "^0.545.0",
     "@prisma/client": "^6.17.1",
+    "lucide-react": "^0.545.0",
+    "nodemailer": "^7.0.9",
     "prisma": "^6.17.1"
   }
 }

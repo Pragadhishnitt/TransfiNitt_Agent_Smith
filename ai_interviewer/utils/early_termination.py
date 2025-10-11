@@ -4,14 +4,14 @@ Detects when user wants to end the interview early.
 """
 
 import re
-from typing import Tuple
+from typing import Tuple, List, Dict
 
 class EarlyTerminationDetector:
     """Detects signals that user wants to end the interview"""
     
-    # UPDATED: More casual and flexible exit phrases
+    # Exit phrases that clearly indicate wanting to stop
     EXIT_PHRASES = [
-        # Direct exit commands (most common)
+        # Direct exit commands
         "end this",
         "end here",
         "end now",
@@ -108,10 +108,29 @@ class EarlyTerminationDetector:
         "annoyed", "angry", "upset", "stressed", "anxious"
     ]
     
-    # NEW: Short dismissive responses that indicate wanting to end
+    # Short dismissive responses
     DISMISSIVE_RESPONSES = [
         "yeah", "yea", "yep", "ok", "okay", "fine", "whatever",
         "sure", "meh", "nah", "nope"
+    ]
+    
+    # Resistant/defensive responses
+    RESISTANT_PHRASES = [
+        "why you need",
+        "why do you need",
+        "why you asking",
+        "why are you asking",
+        "none of your business",
+        "dont want to say",
+        "don't want to say",
+        "no i cant",
+        "no i can't",
+        "i cant",
+        "i can't",
+        "cant tell you",
+        "can't tell you",
+        "wont tell",
+        "won't tell"
     ]
     
     def check_exit_intent(self, text: str) -> Tuple[bool, str]:
@@ -121,32 +140,31 @@ class EarlyTerminationDetector:
         """
         text_lower = text.lower().strip()
         
-        # STRATEGY 1: Check for explicit exit phrases (most reliable)
+        # Check for explicit exit phrases
         for phrase in self.EXIT_PHRASES:
             if phrase in text_lower:
                 return True, f"explicit_exit: '{phrase}'"
         
-        # STRATEGY 2: Check for "no" + exit words together
-        # e.g., "no just end", "no stop", "no finish"
+        # Check for "no" + exit words together
         if "no" in text_lower:
             exit_words = ["end", "stop", "finish", "quit", "done", "conclude", "wrap"]
             for word in exit_words:
                 if word in text_lower:
                     return True, f"negative_exit: 'no + {word}'"
         
-        # STRATEGY 3: Check for negative emotions
+        # Check for negative emotions
         for phrase in self.NEGATIVE_EMOTION_PHRASES:
             if phrase in text_lower:
                 return True, f"negative_emotion: '{phrase}'"
         
-        # STRATEGY 4: Check for strong negative sentiment (multiple negative words)
+        # Check for strong negative sentiment
         word_count = 0
         words = text_lower.split()
         for word in self.STRONG_NEGATIVE_WORDS:
             if word in words:
                 word_count += 1
         
-        if word_count >= 2:  # Multiple strong negative words
+        if word_count >= 2:
             return True, f"strong_negative_sentiment: {word_count} negative words"
         
         return False, ""
@@ -159,38 +177,42 @@ class EarlyTerminationDetector:
         word_count = len(text.split())
         return word_count <= 2 and sentiment == "negative"
     
-    def is_repeated_dismissive(self, text: str, conversation_history: list, threshold: int = 2) -> bool:
+    def is_repeated_dismissive(
+        self, 
+        text: str, 
+        conversation_history: List[Dict[str, str]], 
+        threshold: int = 2
+    ) -> bool:
         """
-        NEW: Check if user has given multiple dismissive responses in a row.
-        This indicates they want to end but aren't being explicit.
+        Check if user has given multiple dismissive responses in a row.
         
         Args:
             text: Current user response
             conversation_history: Full conversation history
-            threshold: Number of consecutive dismissive responses to trigger (default 2)
+            threshold: Number of consecutive dismissive responses to trigger
         
         Returns:
-            True if user has given multiple dismissive responses in a row
+            True if user has given threshold+ dismissive responses in a row
         """
         text_lower = text.lower().strip()
         
         # Check if current response is dismissive
-        current_is_dismissive = any(
-            dismissive in text_lower 
-            for dismissive in self.DISMISSIVE_RESPONSES
-        ) or len(text.split()) <= 2
+        current_is_dismissive = (
+            any(d in text_lower for d in self.DISMISSIVE_RESPONSES) or 
+            len(text.split()) <= 2
+        )
         
         if not current_is_dismissive:
             return False
         
-        # Count recent consecutive dismissive responses from user
+        # Count recent consecutive dismissive responses
         dismissive_count = 1  # Current response
         
-        # Look at last N user responses (not assistant)
+        # Look at last few user responses (not assistant)
         user_responses = [
             msg["content"] for msg in reversed(conversation_history)
             if msg.get("role") == "user"
-        ][1:5]  # Skip current (already in history), check last 4
+        ][1:5]  # Skip current (already counted), check last 4
         
         for response in user_responses:
             response_lower = response.lower().strip()
@@ -202,23 +224,43 @@ class EarlyTerminationDetector:
             if is_dismissive:
                 dismissive_count += 1
             else:
-                break  # Stop at first non-dismissive response
+                break  # Stop at first non-dismissive
         
         return dismissive_count >= threshold
+    
+    def is_resistant(self, text: str) -> bool:
+        """
+        Check if response shows resistance/defensiveness.
+        Returns True if resistant (but doesn't terminate - just flags it)
+        """
+        text_lower = text.lower().strip()
+        
+        for phrase in self.RESISTANT_PHRASES:
+            if phrase in text_lower:
+                return True
+        
+        return False
     
     def should_terminate(
         self, 
         text: str, 
         sentiment: str,
-        conversation_history: list,
+        conversation_history: List[Dict[str, str]],
         probe_count: int = 0
     ) -> Tuple[bool, str]:
         """
         COMPREHENSIVE termination check that considers multiple signals.
         
-        This is the main method that should be called.
+        This is the main method to call.
         
-        Returns: (should_terminate, reason)
+        Args:
+            text: Current user response
+            sentiment: Sentiment of response (positive/negative/neutral)
+            conversation_history: Full conversation history
+            probe_count: Number of consecutive probes
+        
+        Returns:
+            Tuple of (should_terminate, reason)
         """
         # Check 1: Explicit exit intent (highest priority)
         should_exit, reason = self.check_exit_intent(text)
@@ -229,12 +271,11 @@ class EarlyTerminationDetector:
         if self.is_very_short_negative(text, sentiment):
             return True, "disengagement: very short negative response"
         
-        # Check 3: Repeated dismissive responses (user is being polite but wants to stop)
+        # Check 3: Repeated dismissive responses
         if self.is_repeated_dismissive(text, conversation_history, threshold=2):
             return True, "disengagement: repeated dismissive responses"
         
-        # Check 4: User has been probed too many times and still giving short responses
-        # This prevents the "probe death loop"
+        # Check 4: Probe fatigue (too many probes + still short)
         if probe_count >= 2 and len(text.split()) <= 3:
             return True, "probe_fatigue: multiple probes with continued short responses"
         

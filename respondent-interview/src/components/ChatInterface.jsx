@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { interviewAPI } from '../services/api';
 import { useSpeechToText } from '../hooks/useSpeechToText';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
-import { Mic, MicOff, Send, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Send, Volume2, Clock } from 'lucide-react';
 
 function ChatInterface({ sessionId, onComplete }) {
   const [messages, setMessages] = useState([]);
@@ -30,6 +30,22 @@ function ChatInterface({ sessionId, onComplete }) {
     voicesLoaded,
     isSupported: isSpeechSynthesisSupported,
   } = useSpeechSynthesis();
+
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedTime((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -241,89 +257,125 @@ function ChatInterface({ sessionId, onComplete }) {
   };
 
   return (
-    <div className="chat-interface">
-      <div className="chat-header">
-        <h2>Interview in Progress</h2>
-        <div className="question-counter">
-          Question {questionCount}
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex flex-col">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 backdrop-blur-xl bg-opacity-80 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900">Interview in Progress</h2>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-full">
+              <Clock size={16} className="text-gray-600" />
+              <span className="text-sm font-medium text-gray-700 tabular-nums">{formatTime(elapsedTime)}</span>
+            </div>
+            <div className="bg-blue-100 px-4 py-2 rounded-full">
+              <span className="text-sm font-medium text-blue-700">Question {questionCount}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="messages-container">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`message ${message.sender === 'user' ? 'user-message' : 'bot-message'}`}
-          >
-            <div className="message-content">
-              <p>{message.text}</p>
-              {message.sender === 'bot' && isSpeechSynthesisSupported && (
+      {/* Messages Container */}
+      <div className="flex-1 overflow-y-auto px-6 py-8">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-2xl ${
+                  message.sender === 'user'
+                    ? 'bg-black text-white rounded-3xl rounded-tr-lg'
+                    : 'bg-white text-gray-900 rounded-3xl rounded-tl-lg border border-gray-200'
+                } px-6 py-4 shadow-sm`}
+              >
+                <p className="text-base leading-relaxed">{message.text}</p>
+                {message.sender === 'bot' && isSpeechSynthesisSupported && (
+                  <button
+                    className="mt-3 flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                    onClick={() => speak(message.text)}
+                    title="Replay message"
+                  >
+                    <Volume2 size={16} />
+                    <span className="font-medium">Replay</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white text-gray-900 rounded-3xl rounded-tl-lg border border-gray-200 px-6 py-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {isSpeaking && (
+            <div className="flex justify-center">
+              <div className="bg-blue-50 border border-blue-200 rounded-full px-5 py-2.5 flex items-center gap-2">
+                <Volume2 size={16} className="text-blue-600 animate-pulse" />
+                <span className="text-sm font-medium text-blue-700">Speaking...</span>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input Container */}
+      <div className="bg-white border-t border-gray-200 backdrop-blur-xl bg-opacity-80 sticky bottom-0">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          {isListening && (
+            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 flex items-center gap-3">
+              <div className="relative">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-ping absolute"></div>
+                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+              </div>
+              <span className="text-sm font-medium text-blue-700">
+                {interimTranscript || 'Listening...'}
+              </span>
+            </div>
+          )}
+          
+          <div className="flex items-end gap-3">
+            <div className="flex-1 bg-gray-100 rounded-3xl flex items-end overflow-hidden border border-gray-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all">
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={isListening ? "Listening..." : "Type your answer..."}
+                disabled={isLoading}
+                rows={1}
+                className="flex-1 bg-transparent px-5 py-4 text-base text-gray-900 placeholder-gray-500 resize-none outline-none max-h-32"
+              />
+              
+              {isSpeechToTextSupported && (
                 <button
-                  className="replay-button"
-                  onClick={() => speak(message.text)}
-                  title="Replay message"
+                  className={`m-2 p-3 rounded-full transition-all ${
+                    isListening
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  onClick={toggleListening}
+                  disabled={isLoading}
+                  title={isListening ? "Stop recording" : "Start voice input"}
                 >
-                  <Volume2 size={16} />
+                  {isListening ? <MicOff size={20} /> : <Mic size={20} />}
                 </button>
               )}
             </div>
-          </div>
-        ))}
-        
-        {isLoading && (
-          <div className="message bot-message">
-            <div className="message-content">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {isSpeaking && (
-          <div className="speaking-indicator">
-            <Volume2 size={16} />
-            <span>Speaking...</span>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="input-container">
-        {isListening && (
-          <div className="interim-transcript">
-            <span className="listening-pulse"></span>
-            Listening: {interimTranscript || 'Speak now...'}
-          </div>
-        )}
-        
-        <div className="input-wrapper">
-          <textarea
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={isListening ? "Listening..." : "Type your answer or use voice input..."}
-            disabled={isLoading}
-            rows={1}
-          />
-          
-          <div className="input-actions">
-            {isSpeechToTextSupported && (
-              <button
-                className={`voice-button ${isListening ? 'listening' : ''}`}
-                onClick={toggleListening}
-                disabled={isLoading}
-                title={isListening ? "Stop recording" : "Start voice input"}
-              >
-                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-              </button>
-            )}
             
             <button
-              className="send-button"
+              className="p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-all shadow-lg shadow-blue-600/30 hover:shadow-xl hover:shadow-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               onClick={handleSendMessage}
               disabled={!inputValue.trim() || isLoading}
               title="Send message"
@@ -331,13 +383,15 @@ function ChatInterface({ sessionId, onComplete }) {
               <Send size={20} />
             </button>
           </div>
+          
+          {!isSpeechToTextSupported && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
+              <p className="text-sm text-amber-800">
+                Voice input is not supported in your browser. Please use Chrome, Edge, or Safari.
+              </p>
+            </div>
+          )}
         </div>
-        
-        {!isSpeechToTextSupported && (
-          <div className="browser-warning">
-            Voice input is not supported in your browser. Please use Chrome, Edge, or Safari.
-          </div>
-        )}
       </div>
     </div>
   );

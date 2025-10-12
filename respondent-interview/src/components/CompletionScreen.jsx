@@ -1,74 +1,91 @@
+import React from 'react';
 import PropTypes from 'prop-types';
 import './CompletionScreen.css';
+import { CheckCircle, Clock, HelpCircle, DollarSign, CreditCard } from 'lucide-react';
 
 const CompletionScreen = ({ completionData }) => {
   return (
-    <div className="completion-screen">
-      <div className="celebration-elements">
-        <div className="celebration-icon icon-1">🎉</div>
-        <div className="celebration-icon icon-2">✨</div>
-        <div className="celebration-icon icon-3">🎊</div>
-        <div className="celebration-icon icon-4">🏆</div>
-        <div className="celebration-icon icon-5">💫</div>
-        <div className="celebration-icon icon-6">🌟</div>
-        <div className="celebration-icon icon-7">🎈</div>
-        <div className="celebration-icon icon-8">🎁</div>
-      </div>
-
-      <div className="completion-card">
-        <div className="completion-header">
-          <div className="success-animation">
-            <div className="check-icon">✅</div>
-            <div className="success-rings">
-              <div className="ring ring-1"></div>
-              <div className="ring ring-2"></div>
-              <div className="ring ring-3"></div>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Subtle background decoration */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,197,94,0.05),transparent_50%)]"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+      
+      <div className="max-w-3xl w-full relative z-10">
+        {/* Success Animation */}
+        <div className="text-center mb-12 animate-fade-in">
+          <div className="inline-block relative mb-8">
+            <div className="w-24 h-24 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30 animate-bounce-slow">
+              <CheckCircle className="w-14 h-14 text-white" strokeWidth={2.5} />
             </div>
+            {/* Ripple effect */}
+            <div className="absolute inset-0 rounded-full bg-green-500 opacity-20 animate-ping"></div>
           </div>
-          <h1>Interview Complete!</h1>
-          <p className="completion-subtitle">Great job! Your responses have been recorded.</p>
+          
+          <h1 className="text-6xl font-semibold text-gray-900 tracking-tight mb-4 leading-tight">
+            Interview Complete!
+          </h1>
+          <p className="text-xl text-gray-600 font-light">
+            Great job! Your responses have been recorded.
+          </p>
         </div>
 
-        <div className="summary-section">
-          <div className="section-header">
-            <span className="section-icon">📝</span>
-            <h2>Summary</h2>
+        {/* Summary Section */}
+        <div className="bg-white rounded-3xl p-8 mb-6 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <span className="text-xl">📝</span>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900">Summary</h2>
           </div>
-          <p>{completionData.summary}</p>
+          <p className="text-base text-gray-600 leading-relaxed">
+            {completionData.summary}
+          </p>
         </div>
 
-        <div className="stats-grid">
-          <div className="stat-item">
-            <div className="stat-icon">⏱️</div>
-            <div className="stat-content">
-              <span className="stat-label">Duration</span>
-              <span className="stat-value">{completionData.duration_minutes} mins</span>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-2xl p-6 text-center border border-gray-200 hover:shadow-lg transition-shadow">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl mb-3">
+              <Clock className="w-6 h-6 text-gray-700" />
+            </div>
+            <div className="text-sm text-gray-500 mb-1 font-medium">Duration</div>
+            <div className="text-2xl font-semibold text-gray-900">
+              {completionData.duration_minutes} <span className="text-lg text-gray-600">mins</span>
             </div>
           </div>
 
-          <div className="stat-item">
-            <div className="stat-icon">❓</div>
-            <div className="stat-content">
-              <span className="stat-label">Questions</span>
-              <span className="stat-value">{completionData.total_questions}</span>
+          <div className="bg-white rounded-2xl p-6 text-center border border-gray-200 hover:shadow-lg transition-shadow">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl mb-3">
+              <HelpCircle className="w-6 h-6 text-gray-700" />
+            </div>
+            <div className="text-sm text-gray-500 mb-1 font-medium">Questions</div>
+            <div className="text-2xl font-semibold text-gray-900">
+              {completionData.total_questions}
             </div>
           </div>
 
-          <div className="stat-item">
-            <div className="stat-icon">💰</div>
-            <div className="stat-content">
-              <span className="stat-label">Reward</span>
-              <span className="stat-value">${completionData.incentive.amount.toFixed(2)}</span>
+          <div className="bg-white rounded-2xl p-6 text-center border border-gray-200 hover:shadow-lg transition-shadow">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-xl mb-3">
+              <DollarSign className="w-6 h-6 text-green-700" />
+            </div>
+            <div className="text-sm text-gray-500 mb-1 font-medium">Reward</div>
+            <div className="text-2xl font-semibold text-green-600">
+              ${completionData.incentive.amount.toFixed(2)}
             </div>
           </div>
         </div>
 
-        <div className="payment-info">
-          <div className="section-header">
-            <span className="section-icon">💳</span>
-            <h3>Payment Information</h3>
+        {/* Payment Information */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl p-8 border border-blue-100">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+              <CreditCard className="w-5 h-5 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900">Payment Information</h3>
           </div>
-          <p>You will get $5 within the next 48 hours.</p>
+          <p className="text-base text-gray-700 leading-relaxed">
+            You will receive <span className="font-semibold text-gray-900">${completionData.incentive.amount.toFixed(2)}</span> within the next <span className="font-semibold text-gray-900">48 hours</span>.
+          </p>
         </div>
       </div>
     </div>

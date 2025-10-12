@@ -11,8 +11,8 @@ The platform follows a **microservices architecture** with the following compone
 ### **Core Services**
 1. **Backend Service** (Node.js + Express) - `http://localhost:8000`
 2. **AI Interviewer Agent** (Python FastAPI) - `http://localhost:8001` 
-3. **Researcher Dashboard** (React) - `http://localhost:5173`
-4. **Respondent Interview App** (React) - `http://localhost:5174`
+3. **Researcher Dashboard** (React) - `http://localhost:3000`
+4. **Respondent Interview App** (React) - `http://localhost:3001`
 
 ## 📁 **Project Structure**
 
@@ -78,10 +78,8 @@ TransfiNitt_Agent_Smith/
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**
-- Node.js (for backend and frontend services)
-- Python 3.8+ (for AI agent service)
-- PostgreSQL (for data storage)
-- Redis (for conversation storage)
+- Docker and Docker Compose installed
+- Git (to clone the repository)
 
 ### **Setup Instructions**
 
@@ -92,37 +90,51 @@ TransfiNitt_Agent_Smith/
    ```
 
 2. **Set up environment variables**:
-   - Copy `.env.example` to `.env` in each service folder
+   - Copy `.env.example` to `.env` in the root directory
    - Configure database URLs, API keys, and service URLs
 
-3. **Start each service**:
+3. **Start all services with Docker Compose**:
    ```bash
-   # Backend Service
-   cd backend
-   npm install
-   npm run dev
-
-   # AI Agent Service
-   cd ai_interviewer
-   pip install -r requirements.txt
-   python main.py
-
-   # Researcher Dashboard
-   cd researcher-dashboard
-   npm install
-   npm run dev
-
-   # Respondent Interview App
-   cd respondent-interview
-   npm install
-   npm run dev
+   docker-compose up
    ```
+
+   This single command will start all services:
+   - Backend Service (Node.js + Express)
+   - AI Agent Service (Python FastAPI)
+   - Researcher Dashboard (React)
+   - Respondent Interview App (React)
+   - PostgreSQL Database
+   - Redis Cache
+   - Nginx Load Balancer
 
 4. **Access the platform**:
    - Researcher Dashboard: `http://localhost:3000`
    - Respondent Interview: `http://localhost:3001`
-   - Backend API: `http://localhost:8000`
-   - AI Agent Service: `http://localhost:8001`
+
+### **Docker Commands**
+
+```bash
+# Start all services
+docker-compose up
+
+# Start in background (detached mode)
+docker-compose up -d
+
+# Stop all services
+docker-compose down
+
+# View logs
+docker-compose logs
+
+# View logs for specific service
+docker-compose logs backend
+
+# Rebuild and start services
+docker-compose up --build
+
+# Stop and remove volumes
+docker-compose down -v
+```
 
 ## 🔄 **Workflow**
 
@@ -142,10 +154,13 @@ TransfiNitt_Agent_Smith/
 
 ## 📦 **Docker Support**
 
-The project includes Docker configurations for easy deployment:
-- Individual Dockerfiles for each service
-- Docker Compose for orchestration
-- Nginx configuration for load balancing
+The entire platform is **fully containerized** for easy deployment and development:
+- **Single Command Setup**: `docker-compose up` starts everything
+- **Individual Dockerfiles** for each service
+- **Docker Compose** for orchestration and service dependencies
+- **Nginx** configuration for load balancing
+- **PostgreSQL** and **Redis** containers included
+- **No local dependencies** required (Node.js, Python, databases)
 
 ## 🔐 **Security & Authentication**
 
@@ -168,8 +183,6 @@ The project includes Docker configurations for easy deployment:
 
 - **Backend API**: `http://localhost:8000`
 - **AI Agent Service**: `http://localhost:8001`
-- **Researcher Dashboard**: `http://localhost:5173`
-- **Respondent Interview App**: `http://localhost:5174`
 
 ## 📝 **Environment Variables**
 

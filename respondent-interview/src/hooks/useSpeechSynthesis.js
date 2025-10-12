@@ -24,14 +24,14 @@ export function useSpeechSynthesis() {
           console.log('✅ Voices loaded:', availableVoices.length);
           console.log('Available voices:', availableVoices.map(v => `${v.name} (${v.lang})`));
           
-          // Log Indian voices if found
-          const indianVoices = availableVoices.filter(v => 
-            v.lang.includes('en-IN') || v.name.toLowerCase().includes('india')
+          // Log American voices if found
+          const americanVoices = availableVoices.filter(v => 
+            v.lang.includes('en-US') || v.name.toLowerCase().includes('us') || v.name.toLowerCase().includes('american')
           );
-          if (indianVoices.length > 0) {
-            console.log('🇮🇳 Indian voices found:', indianVoices.map(v => v.name));
+          if (americanVoices.length > 0) {
+            console.log('🇺🇸 American English voices found:', americanVoices.map(v => v.name));
           } else {
-            console.log('⚠️ No Indian voices found, will use best alternative');
+            console.log('⚠️ No American voices found, will use best alternative');
           }
         } else {
           console.log('⏳ No voices loaded yet, retrying...');
@@ -107,40 +107,42 @@ export function useSpeechSynthesis() {
       const utterance = new SpeechSynthesisUtterance(text);
       utteranceRef.current = utterance;
       
-      // Configure voice settings
-      utterance.rate = options.rate || 0.85; // Slightly slower for Indian accent clarity
+      // Configure voice settings for natural American English
+      utterance.rate = options.rate || 0.95; // Natural speaking pace
       utterance.pitch = options.pitch || 1.0;
       utterance.volume = options.volume || 1.0;
       
-      // Select best Indian voice
+      // Select best American English voice
       const currentVoices = window.speechSynthesis.getVoices();
       if (currentVoices.length > 0) {
         let selectedVoice = null;
         
-        // Priority 1: Look for Indian English voices (en-IN)
+        // Priority 1: Look for US English voices (en-US)
         selectedVoice = currentVoices.find(voice => 
-          voice.lang === 'en-IN' || voice.lang === 'en_IN'
+          voice.lang === 'en-US' || voice.lang === 'en_US'
         );
         
-        // Priority 2: Look for voices with "India" in the name
+        // Priority 2: Google US English voices (high quality)
         if (!selectedVoice) {
           selectedVoice = currentVoices.find(voice => 
-            voice.name.toLowerCase().includes('india') ||
-            voice.name.toLowerCase().includes('hindi')
+            voice.lang.includes('en-US') && voice.name.toLowerCase().includes('google')
           );
         }
         
-        // Priority 3: Google Indian voices
+        // Priority 3: Microsoft voices with "United States" in name
         if (!selectedVoice) {
           selectedVoice = currentVoices.find(voice => 
-            voice.lang.includes('en-IN') && voice.name.includes('Google')
+            voice.name.toLowerCase().includes('united states') ||
+            voice.name.toLowerCase().includes('american')
           );
         }
         
-        // Priority 4: Any UK English (closer to Indian accent than US)
+        // Priority 4: Any voice with "US" in name
         if (!selectedVoice) {
           selectedVoice = currentVoices.find(voice => 
-            voice.lang === 'en-GB' || voice.lang === 'en_GB'
+            voice.name.toLowerCase().includes('us') ||
+            voice.name.toLowerCase().includes('zira') || // Microsoft Zira (US)
+            voice.name.toLowerCase().includes('david') // Microsoft David (US)
           );
         }
         
@@ -157,24 +159,24 @@ export function useSpeechSynthesis() {
         }
         
         utterance.voice = selectedVoice;
-        console.log('Using voice:', selectedVoice?.name, '- Language:', selectedVoice?.lang);
+        console.log('🔊 Using voice:', selectedVoice?.name, '- Language:', selectedVoice?.lang);
       }
 
       utterance.onstart = () => {
-        console.log('Speech started');
+        console.log('🗣️ Speech started');
         setIsSpeaking(true);
         options.onStart?.();
       };
 
       utterance.onend = () => {
-        console.log('Speech ended');
+        console.log('✅ Speech ended');
         setIsSpeaking(false);
         utteranceRef.current = null;
         options.onEnd?.();
       };
 
       utterance.onerror = (event) => {
-        console.error('Speech error:', event.error);
+        console.error('❌ Speech error:', event.error);
         setIsSpeaking(false);
         utteranceRef.current = null;
         options.onError?.(event);
@@ -183,7 +185,7 @@ export function useSpeechSynthesis() {
       // Speak the utterance
       try {
         window.speechSynthesis.speak(utterance);
-        console.log('Speech queued:', text.substring(0, 50) + '...');
+        console.log('💬 Speech queued:', text.substring(0, 50) + '...');
       } catch (error) {
         console.error('Error speaking:', error);
         setIsSpeaking(false);
@@ -196,29 +198,30 @@ export function useSpeechSynthesis() {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
       utteranceRef.current = null;
-      console.log('Speech stopped');
+      console.log('🛑 Speech stopped');
     }
   }, [isSupported]);
 
   const pause = useCallback(() => {
     if (isSupported && isSpeaking) {
       window.speechSynthesis.pause();
-      console.log('Speech paused');
+      console.log('⏸️ Speech paused');
     }
   }, [isSupported, isSpeaking]);
 
   const resume = useCallback(() => {
     if (isSupported) {
       window.speechSynthesis.resume();
-      console.log('Speech resumed');
+      console.log('▶️ Speech resumed');
     }
   }, [isSupported]);
 
-  // Helper function to get available Indian voices
-  const getIndianVoices = useCallback(() => {
+  // Helper function to get available American voices
+  const getAmericanVoices = useCallback(() => {
     return voices.filter(voice => 
-      voice.lang.includes('en-IN') || 
-      voice.name.toLowerCase().includes('india')
+      voice.lang.includes('en-US') || 
+      voice.name.toLowerCase().includes('us') ||
+      voice.name.toLowerCase().includes('american')
     );
   }, [voices]);
 
@@ -231,6 +234,6 @@ export function useSpeechSynthesis() {
     isSupported,
     voicesLoaded,
     voices,
-    getIndianVoices,
+    getAmericanVoices,
   };
 }

@@ -5,10 +5,8 @@ import { CheckCircle, Clock, HelpCircle, DollarSign, CreditCard } from 'lucide-r
 
 const CompletionScreen = ({ completionData }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-white from-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
       {/* Subtle background decoration */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,197,94,0.05),transparent_50%)]"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(59,130,246,0.05),transparent_50%)]"></div>
       
       <div className="max-w-3xl w-full relative z-10">
         {/* Success Animation */}

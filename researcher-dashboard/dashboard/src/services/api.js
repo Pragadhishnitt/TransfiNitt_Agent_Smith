@@ -90,6 +90,7 @@ export const respondentsAPI = {
 // Insights API
 export const insightsAPI = {
   getOverview: (params = {}) => api.get('/insights/overview', { params }),
+  getReport: (templateId) => api.post(`/templates/${templateId}/report`),
 };
 
 // Survey API

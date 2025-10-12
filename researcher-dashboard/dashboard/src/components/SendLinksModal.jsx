@@ -152,9 +152,6 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
     if (response.data.success) {
       const { interview_link, email_sent } = response.data;
       
-      // Copy link to clipboard
-      await navigator.clipboard.writeText(interview_link);
-      
       // Mark as sent
       setSentLinks(prev => new Set(prev).add(respondent.id));
       

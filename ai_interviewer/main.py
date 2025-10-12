@@ -175,53 +175,6 @@ class EarlyTerminationDetector:
 early_termination_detector = EarlyTerminationDetector()
 
 # ========================================================================
-# TOPIC DEVIATION DETECTOR
-# ========================================================================
-class TopicDeviationDetector:
-    """Detects when user changes the topic"""
-    
-    def detect_deviation(self, original_question: str, user_response: str, groq_client) -> Tuple[bool, str]:
-        """
-        Uses Groq to detect if user's response is relevant to the question.
-        Returns: (is_deviated, deviation_type)
-        """
-        prompt = f"""You are analyzing if a user's response is relevant to the question asked.
-
-Question: {original_question}
-User Response: {user_response}
-
-Analyze if the user's response directly addresses the question or if they've changed the topic.
-
-Respond with ONLY ONE WORD:
-- "RELEVANT" if they answered the question (even briefly)
-- "TANGENT" if they went on a related but different tangent
-- "COMPLETELY_OFF" if they completely changed the topic
-
-Response:"""
-
-        try:
-            response = groq_client.chat.completions.create(
-                model=config.GROQ_FAST_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=10,
-                temperature=0.1
-            )
-            result = response.choices[0].message.content.strip().upper()
-            
-            if "TANGENT" in result:
-                return True, "tangent"
-            elif "COMPLETELY_OFF" in result or "OFF" in result:
-                return True, "completely_off"
-            else:
-                return False, "relevant"
-        except Exception as e:
-            print(f"Deviation detection error: {e}")
-            return False, "relevant"
-
-# Initialize deviation detector
-deviation_detector = TopicDeviationDetector()
-
-# ========================================================================
 # REDIS CLIENT SETUP
 # ========================================================================
 redis_client = redis.Redis(
@@ -733,36 +686,20 @@ async def chat(request: ChatRequest):
         
         # 7. Check for topic deviation (ALWAYS check, regardless of vagueness)
         original_question = get_original_question(conversation[:-1])  # Exclude current user message
-        is_deviated = False
-        deviation_type = None
         
-        # Check deviation for ALL responses
-        is_deviated, deviation_type = deviation_detector.detect_deviation(
-            original_question, 
-            user_message, 
-            groq_client
-        )
-        
-        if is_deviated:
-            print(f"🔄 TOPIC DEVIATION DETECTED: {deviation_type}")
-            print(f"   Original Q: {original_question[:60]}...")
-            print(f"   User changed to: {user_message[:60]}...")
         
         # 8. Determine if we need to probe (vague OR deviated)
-        needs_probe = is_vague or is_deviated
+        needs_probe = is_vague
         
         # 9. Generate next question
         if needs_probe:
             print(f"🔍 PROBE AGENT CALLED")
             if is_vague:
                 print(f"   Reason: Vague response")
-            if is_deviated:
-                print(f"   Reason: Topic deviation ({deviation_type})")
             
             next_question = generate_probe_question(
                 conversation, 
                 original_question,
-                deviation_type if is_deviated else None
             )
             is_probe_flag = True
             

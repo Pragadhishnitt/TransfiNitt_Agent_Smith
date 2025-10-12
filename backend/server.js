@@ -1,11 +1,16 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const crypto = require('crypto');
-const nodemailer = require('nodemailer');
-const { PrismaClient } = require('./generated/prisma');
-const { generateToken, verifyToken, hashPassword, comparePassword } = require('./auth');
+import express from 'express';
+import cors from 'cors';
+import axios from 'axios';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
+import { PrismaClient } from './generated/prisma/index.js';
+import { generateToken, verifyToken, hashPassword, comparePassword } from './auth.js';
+import requestLogger from './logger.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+
 
 const app = express();
 const prisma = new PrismaClient();
@@ -13,7 +18,6 @@ const PORT = process.env.PORT || 8000;
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
 
 // Middleware
-const requestLogger = require('./logger');
 app.use(requestLogger);
 app.use(cors({
   origin: ['http://localhost:5174', 'http://localhost:5173'],
@@ -491,6 +495,147 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
   } catch (err) {
     console.error('Error in /api/templates/:id/available-respondents:', err);
     error(res, 'SERVER_ERROR', 'Failed to fetch available respondents', 500);
+  }
+});
+
+import fetch from 'node-fetch';
+
+app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
+  try {
+    const templateId = req.params.id;
+    console.log('Generating report for template:', templateId);
+
+    // === Verify template belongs to researcher ===
+    const template = await prisma.template.findFirst({
+      where: {
+        id: templateId,
+        researcher_id: req.user.id
+      },
+      select: { id: true, title: true, topic: true, researcher_id: true }
+    });
+
+    if (!template) {
+      console.log('Template not found or not owned by researcher');
+      return error(res, 'NOT_FOUND', 'Template not found', 404);
+    }
+
+    // === Get all completed sessions ===
+    const sessions = await prisma.session.findMany({
+      where: { template_id: templateId, status: 'completed' },
+      select: {
+        id: true,
+        summary: true,
+        sentiment_score: true,
+        key_themes: true,
+        completed_at: true,
+        respondent: {
+          select: { id: true, email: true }
+        }
+      },
+      orderBy: { completed_at: 'desc' }
+    });
+
+    if (sessions.length === 0) {
+      return error(res, 'NO_DATA', 'No completed sessions found for this template', 400);
+    }
+
+    console.log(`Found ${sessions.length} completed sessions`);
+
+    // === Prepare session payload ===
+    const fullSessions = await Promise.all(
+      sessions.map(async (session) => {
+        const respondent = await prisma.respondent.findUnique({
+          where: { user_id: session.respondent.id },
+          select: { name: true, demographics: true }
+        });
+        return {
+          session_id: session.id,
+          summary: session.summary,
+          sentiment_score: session.sentiment_score
+            ? parseFloat(session.sentiment_score.toString())
+            : null,
+          key_themes: session.key_themes,
+          demographics: respondent?.demographics || null,
+          respondent_name: respondent?.name || 'Anonymous'
+        };
+      })
+    );
+
+    // === Limit payload for Gemini (approximate token limit control) ===
+    let totalChars = 0;
+    const MAX_CHARS = 20000; // ~3k tokens (safe buffer)
+    const limitedSessions = [];
+
+    for (const s of fullSessions) {
+      const textLen = JSON.stringify(s).length;
+      if (totalChars + textLen > MAX_CHARS) break;
+      totalChars += textLen;
+      limitedSessions.push(s);
+    }
+
+    console.log(`Using ${limitedSessions.length}/${sessions.length} sessions for Gemini prompt`);
+
+    // === Gemini API Call ===
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    const prompt = `
+You are an expert market research analyst. Generate a concise and structured **market research report** 
+based on the provided interview session summaries.
+
+Each session contains a respondent summary, demographics, sentiment score, and key themes.
+
+The report must include:
+1. **Executive Summary** – overall sentiment, major insights, and trends.
+2. **Respondent Insights** – segmentation of respondents (based on demographics if available).
+3. **Key Themes and Sentiments** – summarize recurring themes and emotional tones.
+4. **Market Trends and Opportunities** – emerging patterns and potential actions.
+5. **Conclusion and Recommendations** – actionable insights for the researcher.
+
+Keep the language professional and analytical, suitable for presentation to stakeholders.
+Avoid repetition. Focus on patterns, not individual opinions.
+
+Template Topic: "${template.topic}"
+Template Title: "${template.title}"
+
+Sessions Data:
+${JSON.stringify(limitedSessions, null, 2)}
+`;
+
+    console.log('Calling Gemini API...');
+
+    const aiResponse = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      })
+    });
+
+    if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+      console.error('Gemini API error:', aiResponse.status, errText);
+      return error(res, 'GEMINI_ERROR', 'Failed to generate report from Gemini', 500);
+    }
+
+    const aiData = await aiResponse.json();
+    const reportText =
+      aiData?.candidates?.[0]?.content?.parts?.[0]?.text || 'No report generated';
+
+    console.log('Report generated successfully');
+
+    // === Return report ===
+    success(res, {
+      template_id: templateId,
+      template_title: template.title,
+      sessions_analyzed: limitedSessions.length,
+      report: reportText,
+      generated_at: new Date().toISOString()
+    });
+
+  } catch (err) {
+    console.error('Error in /api/templates/:id/report:', err);
+    error(res, 'SERVER_ERROR', 'Failed to generate market research report', 500);
   }
 });
 

@@ -625,12 +625,34 @@ ${JSON.stringify(limitedSessions, null, 2)}
 
     console.log('Report generated successfully');
     console.log('Report:', reportText);
+    
+    // === Extract and aggregate themes from sessions ===
+    const allThemes = [];
+    sessions.forEach(session => {
+      if (session.key_themes && Array.isArray(session.key_themes)) {
+        allThemes.push(...session.key_themes);
+      }
+    });
+    
+    // Count theme occurrences
+    const themeCounts = {};
+    allThemes.forEach(theme => {
+      themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+    });
+    
+    // Convert to array and sort by count
+    const topThemes = Object.entries(themeCounts)
+      .map(([theme, count]) => ({ theme, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10); // Top 10 themes
+    
     // === Return report ===
     success(res, {
       template_id: templateId,
       template_title: template.title,
       sessions_analyzed: limitedSessions.length,
       report: reportText,
+      top_themes: topThemes,
       generated_at: new Date().toISOString()
     });
 
@@ -1059,15 +1081,26 @@ app.post('/api/interviews/:session_id/message', async (req, res) => {
 
 app.get('/api/insights/overview', verifyToken, async (req, res) => {
   try {
-    const sessions = await prisma.session.findMany({
-      where: {
-        template: {
-          researcher_id: req.user.id
-        },
-        status: 'completed'
+    const { template_id } = req.query;
+    
+    // Build where clause based on whether template_id is provided
+    const whereClause = {
+      template: {
+        researcher_id: req.user.id
       },
+      status: 'completed'
+    };
+    
+    // If template_id is provided, filter by that template
+    if (template_id) {
+      whereClause.template_id = template_id;
+    }
+    
+    const sessions = await prisma.session.findMany({
+      where: whereClause,
       select: {
-        sentiment_score: true
+        sentiment_score: true,
+        key_themes: true
       }
     });
 
@@ -1081,6 +1114,26 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
     const neutralCount = sentiments.filter(s => s >= 0.4 && s < 0.6).length;
     const negativeCount = sentiments.filter(s => s < 0.4).length;
 
+    // Extract and aggregate themes from sessions
+    const allThemes = [];
+    sessions.forEach(session => {
+      if (session.key_themes && Array.isArray(session.key_themes)) {
+        allThemes.push(...session.key_themes);
+      }
+    });
+    
+    // Count theme occurrences
+    const themeCounts = {};
+    allThemes.forEach(theme => {
+      themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+    });
+    
+    // Convert to array and sort by count
+    const topThemes = Object.entries(themeCounts)
+      .map(([theme, count]) => ({ theme, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10); // Top 10 themes
+
     success(res, {
       total_interviews: totalInterviews,
       avg_sentiment: avgSentiment.toFixed(2),
@@ -1088,7 +1141,8 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
         positive: positiveCount,
         neutral: neutralCount,
         negative: negativeCount
-      }
+      },
+      top_themes: topThemes
     });
   } catch (err) {
     console.error(err);

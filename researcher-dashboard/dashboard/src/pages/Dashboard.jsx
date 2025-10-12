@@ -56,12 +56,18 @@ const Dashboard = () => {
       const insightsResponse = await insightsAPI.getOverview();
       console.log('📈 Insights response:', insightsResponse);
       
+      // Fetch insights stats
+      const statsResponse = await insightsAPI.getStats();
+      console.log('📊 Stats response:', statsResponse);
+      
       if (insightsResponse.data.success) {
         const data = insightsResponse.data;
+        const statsData = statsResponse.data.success ? statsResponse.data : null;
+        
         const newStats = {
-          totalInterviews: data.total_interviews || 0,
+          totalInterviews: statsData?.total_sessions || data.total_interviews || 0,
           avgSentiment: (data.avg_sentiment * 100).toFixed(1) || 0,
-          completionRate: (data.completion_rate * 100).toFixed(1) || 0,
+          completionRate: statsData?.completion_rate ? statsData.completion_rate.toFixed(1) : (data.completion_rate * 100).toFixed(1) || 0,
           activeSessions: data.active_sessions || 0,
         };
         setStats(newStats);

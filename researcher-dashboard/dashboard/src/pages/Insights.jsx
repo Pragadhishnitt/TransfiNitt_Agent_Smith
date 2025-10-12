@@ -5,8 +5,10 @@ import { insightsAPI, templatesAPI } from '../services/api';
 
 const Insights = () => {
   const [overview, setOverview] = useState(null);
+  const [stats, setStats] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [templateThemes, setTemplateThemes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [marketingReport, setMarketingReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -14,6 +16,39 @@ const Insights = () => {
   useEffect(() => {
     console.log("🔄 useEffect triggered - selectedTemplate:", selectedTemplate);
     fetchData();
+    // If a template is selected, proactively fetch its report themes so the Top Themes
+    // chart can be populated immediately without requiring the user to click Generate.
+    if (selectedTemplate) {
+      (async () => {
+        try {
+          const resp = await insightsAPI.getReport(selectedTemplate);
+          // normalize various response shapes
+          let reportData = null;
+          if (resp.status === 200 && resp.data) {
+            if (resp.data.success && resp.data.data) {
+              reportData = resp.data.data.report || resp.data.data;
+            } else if (resp.data.report) {
+              reportData = resp.data.report;
+            } else if (resp.data.data) {
+              reportData = resp.data.data;
+            } else {
+              reportData = resp.data;
+            }
+          }
+
+          if (reportData && reportData.top_themes) {
+            setTemplateThemes(reportData.top_themes);
+          } else {
+            setTemplateThemes(null);
+          }
+        } catch (err) {
+          console.warn('Failed to fetch template report for themes:', err);
+          setTemplateThemes(null);
+        }
+      })();
+    } else {
+      setTemplateThemes(null);
+    }
     // Clear report when template changes, but don't auto-fetch
     setMarketingReport(null);
     console.log("🧹 Cleared marketing report due to template change");
@@ -34,11 +69,22 @@ const Insights = () => {
         setTemplates(templatesResponse.data.templates || []);
       }
 
-      // Fetch insights overview
-      const params = selectedTemplate ? { template_id: selectedTemplate } : {};
-      const insightsResponse = await insightsAPI.getOverview(params);
+      // Fetch insights overview - include template_id if selected
+      const overviewParams = selectedTemplate ? { template_id: selectedTemplate } : {};
+      const insightsResponse = await insightsAPI.getOverview(overviewParams);
       if (insightsResponse.data.success) {
         setOverview(insightsResponse.data);
+      }
+
+      // Fetch stats data - use template-specific endpoint if template is selected
+      let statsResponse;
+      if (selectedTemplate) {
+        statsResponse = await insightsAPI.getStatsByTemplate(selectedTemplate);
+      } else {
+        statsResponse = await insightsAPI.getStats();
+      }
+      if (statsResponse.data.success) {
+        setStats(statsResponse.data);
       }
     } catch (error) {
       console.error('Error fetching insights:', error);
@@ -75,6 +121,14 @@ const Insights = () => {
         ],
         completion_rate: 0.85,
         avg_duration_seconds: 280
+      });
+
+      // Mock stats data
+      setStats({
+        completion_rate: 85.0,
+        average_duration: 280,
+        total_sessions: 50,
+        completed_sessions: 42
       });
       
       setTemplates([
@@ -196,11 +250,24 @@ const Insights = () => {
     { name: 'Negative', value: overview.sentiment_distribution.negative, color: '#EF4444' }
   ] : [];
 
-  const themesData = overview?.top_themes?.map(theme => ({
+  // Prefer per-template themes fetched from the report endpoint when available.
+  const sourceThemes = templateThemes && templateThemes.length > 0 ? templateThemes : overview?.top_themes;
+
+  const themesData = sourceThemes?.map(theme => ({
     theme: theme.theme,
     count: theme.count,
     sentiment: (theme.avg_sentiment * 100).toFixed(0)
   })) || [];
+
+  // If there are no themes available, show a lightweight placeholder so the chart
+  // area isn't empty and provides a hint to the user to generate a report.
+  const placeholderThemes = [
+    { theme: 'No themes yet', count: 1, sentiment: 50 },
+    { theme: 'Generate report', count: 1, sentiment: 50 }
+  ];
+
+  const displayedThemes = themesData.length > 0 ? themesData : placeholderThemes;
+  const isPlaceholder = themesData.length === 0;
 
   const formatDuration = (seconds) => {
     const minutes = Math.floor(seconds / 60);
@@ -275,12 +342,12 @@ const Insights = () => {
       </div>
 
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium mb-2">Total Interviews</p>
-              <p className="text-3xl font-semibold text-gray-900">{overview?.total_interviews || 0}</p>
+              <p className="text-3xl font-semibold text-gray-900">{stats?.total_sessions || overview?.total_interviews || 0}</p>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500">
               <MessageSquare className="w-6 h-6 text-white" />
@@ -307,7 +374,7 @@ const Insights = () => {
             <div>
               <p className="text-gray-600 text-sm font-medium mb-2">Completion Rate</p>
               <p className="text-3xl font-semibold text-gray-900">
-                {overview ? (overview.completion_rate * 100).toFixed(1) : 0}%
+                {stats?.completion_rate ? stats.completion_rate.toFixed(1) : overview ? (overview.completion_rate * 100).toFixed(1) : 0}%
               </p>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500">
@@ -321,11 +388,23 @@ const Insights = () => {
             <div>
               <p className="text-gray-600 text-sm font-medium mb-2">Avg Duration</p>
               <p className="text-3xl font-semibold text-gray-900">
-                {overview ? formatDuration(overview.avg_duration_seconds) : '0m'}
+                {stats?.average_duration ? formatDuration(stats.average_duration) : overview ? formatDuration(overview.avg_duration_seconds) : '0m'}
               </p>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500">
               <Clock className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm font-medium mb-2">Completed Sessions</p>
+              <p className="text-3xl font-semibold text-gray-900">{stats?.completed_sessions || 0}</p>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500">
+              <Users className="w-6 h-6 text-white" />
             </div>
           </div>
         </div>
@@ -379,7 +458,7 @@ const Insights = () => {
         <div className="bg-white rounded-2xl border border-gray-100 p-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Top Themes</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={themesData}>
+            <BarChart data={displayedThemes}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis 
                 dataKey="theme" 
@@ -399,9 +478,23 @@ const Insights = () => {
                   padding: '8px 12px'
                 }}
               />
-              <Bar dataKey="count" fill="#000000" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="count" fill={isPlaceholder ? '#d1d5db' : '#000000'} radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          {isPlaceholder ? (
+            <div className="mt-4 text-center text-sm text-gray-500">
+              No theme data yet. {selectedTemplate ? (
+                <button
+                  onClick={() => fetchMarketingReport(selectedTemplate)}
+                  className="ml-2 px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+                >
+                  Generate report
+                </button>
+              ) : (
+                <span>Please select a template to generate themes.</span>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 

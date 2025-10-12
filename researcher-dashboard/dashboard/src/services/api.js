@@ -90,6 +90,8 @@ export const respondentsAPI = {
 // Insights API
 export const insightsAPI = {
   getOverview: (params = {}) => api.get('/insights/overview', { params }),
+  getStats: (params = {}) => api.get('/insights/stats', { params }),
+  getStatsByTemplate: (templateId) => api.get(`/insights/stats/${templateId}`),
   getReport: (templateId) => api.post(`/templates/${templateId}/report`),
 };
 

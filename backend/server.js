@@ -501,6 +501,7 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
 import fetch from 'node-fetch';
 
 app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
+  console.log('Generating market research report...');
   try {
     const templateId = req.params.id;
     console.log('Generating report for template:', templateId);
@@ -623,7 +624,7 @@ ${JSON.stringify(limitedSessions, null, 2)}
       aiData?.candidates?.[0]?.content?.parts?.[0]?.text || 'No report generated';
 
     console.log('Report generated successfully');
-
+    console.log('Report:', reportText);
     // === Return report ===
     success(res, {
       template_id: templateId,
@@ -1092,6 +1093,60 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     error(res, 'SERVER_ERROR', 'Failed to fetch insights', 500);
+  }
+});
+
+// Get marketing research report for a specific template
+app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
+  try {
+    const templateId = req.params.template_id;
+    console.log('Fetching insights report for template:', templateId);
+
+    // Verify template belongs to researcher
+    const template = await prisma.template.findFirst({
+      where: {
+        id: templateId,
+        researcher_id: req.user.id
+      }
+    });
+
+    if (!template) {
+      return error(res, 'NOT_FOUND', 'Template not found', 404);
+    }
+
+    // Make internal call to the templates/:id/report endpoint
+    const baseUrl = `http://localhost:${process.env.PORT || 8000}`;
+    const reportUrl = `${baseUrl}/api/templates/${templateId}/report`;
+    
+    console.log('Making internal call to:', reportUrl);
+    
+    const reportResponse = await fetch(reportUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': req.headers.authorization // Pass through the auth token
+      }
+    });
+
+    if (!reportResponse.ok) {
+      console.error('Report generation failed:', reportResponse.status, reportResponse.statusText);
+      return error(res, 'SERVER_ERROR', 'Failed to generate report', 500);
+    }
+
+    const reportData = await reportResponse.json();
+    console.log('Report data received:', reportData);
+
+    // Return the report data in the same format
+    success(res, {
+      template_id: templateId,
+      template_title: template.title,
+      report: reportData.data || reportData,
+      generated_at: new Date().toISOString()
+    });
+
+  } catch (err) {
+    console.error('Error in /api/insights/:template_id:', err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch insights report', 500);
   }
 });
 

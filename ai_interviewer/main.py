@@ -287,6 +287,40 @@ def analyze_sentiment(text: str) -> str:
     else:
         return "neutral"
 
+
+def score_sentiment(text: str) -> float:
+    """
+    Produce a numeric sentiment score between 0.0 and 1.0 for a piece of text.
+    This is a lightweight heuristic that complements the categorical label from
+    `analyze_sentiment`. It counts positive/negative cue words and returns a
+    normalized score. Falls back to 0.5 (neutral) when no cues are found.
+    """
+    positive_words = ["good", "great", "excellent", "love", "enjoy", "amazing", "wonderful", "fantastic", "happy", "excited"]
+    negative_words = ["bad", "terrible", "hate", "awful", "disappointed", "frustrated", "angry", "annoyed", "upset"]
+
+    text_lower = text.lower()
+    pos = sum(1 for w in positive_words if w in text_lower)
+    neg = sum(1 for w in negative_words if w in text_lower)
+
+    # If we found explicit polarity words, compute a normalized score
+    total = pos + neg
+    if total > 0:
+        # raw fraction of positive words
+        frac = pos / total
+        # map fraction [0,1] to score range [0.10,0.90] to avoid extreme 0/1
+        score = 0.1 + 0.8 * frac
+        return round(max(0.0, min(1.0, score)), 2)
+
+    # No explicit polarity words found — try heuristic: punctuation, length
+    # Short responses more likely neutral; exclamation shows stronger feeling
+    exclamation_boost = 0.1 if '!' in text_lower else 0.0
+    word_count = len(text_lower.split())
+    if word_count <= 2:
+        return 0.5 + exclamation_boost
+
+    # Default neutral
+    return round(0.5 + exclamation_boost, 2)
+
 def is_vague_response(text: str) -> bool:
     """Check if response is vague and needs probing"""
     word_count = len(text.split())
@@ -619,16 +653,18 @@ async def chat(request: ChatRequest):
         metadata = json.loads(metadata_json)
         research_topic = metadata.get('research_topic', 'your experiences')
         
-        # 2. Add user's message to conversation
+        # 2. Analyze sentiment (categorical + numeric) and add user's message
+        sentiment = analyze_sentiment(user_message)
+        numeric_score = score_sentiment(user_message)
+        print(f"📊 Sentiment: {sentiment} (score={numeric_score})")
+
         conversation.append({
             "role": "user",
             "message": user_message,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "sentiment": sentiment,
+            "sentiment_score": numeric_score
         })
-        
-        # 3. Analyze sentiment
-        sentiment = analyze_sentiment(user_message)
-        print(f"📊 Sentiment: {sentiment}")
         
         # 4. Get current consecutive probe count
         consecutive_probes = metadata.get('consecutive_probes', 0)
@@ -790,14 +826,22 @@ async def end_interview(request: EndRequest):
         terminated_early = metadata.get('terminated_early', False)
         termination_reason = metadata.get('termination_reason', None)
         
-        # 2. Calculate overall sentiment
-        sentiments = [msg.get('sentiment', 'neutral') for msg in conversation if msg['role'] == 'user']
-        sentiment_scores = {
-            'positive': 0.8,
-            'neutral': 0.5,
-            'negative': 0.2
-        }
-        avg_sentiment = sum(sentiment_scores.get(s, 0.5) for s in sentiments) / len(sentiments) if sentiments else 0.5
+        # 2. Calculate overall sentiment using numeric per-message scores
+        user_scores = [float(msg.get('sentiment_score')) for msg in conversation if msg['role'] == 'user' and msg.get('sentiment_score') is not None]
+        if user_scores:
+            avg_sentiment = round(sum(user_scores) / len(user_scores), 2)
+        else:
+            # fallback: derive from categorical sentiments if numeric scores missing
+            sentiments = [msg.get('sentiment', 'neutral') for msg in conversation if msg['role'] == 'user']
+            sentiment_scores = {
+                'positive': 0.8,
+                'neutral': 0.5,
+                'negative': 0.2
+            }
+            avg_sentiment = round(sum(sentiment_scores.get(s, 0.5) for s in sentiments) / len(sentiments), 2) if sentiments else 0.5
+
+        print(f"DEBUG: per-message scores: {user_scores}")
+        print(f"DEBUG: avg_sentiment: {avg_sentiment}")
         
         # 3. Generate summary and key themes
         summary, key_themes = generate_summary_with_groq(conversation, terminated_early)

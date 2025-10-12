@@ -1,14 +1,21 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import './CompletionScreen.css';
 import { CheckCircle, Clock, HelpCircle, DollarSign, CreditCard } from 'lucide-react';
 
 const CompletionScreen = ({ completionData }) => {
   return (
-    <div className="min-h-screen bg-white from-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-6 relative overflow-hidden">
       {/* Subtle background decoration */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[10%] left-[15%] text-4xl animate-bounce opacity-20">💬</div>
+        <div className="absolute top-[20%] right-[20%] text-3xl animate-pulse opacity-30">🎯</div>
+        <div className="absolute bottom-[30%] left-[10%] text-5xl animate-bounce opacity-20" style={{ animationDelay: '1s' }}>✨</div>
+        <div className="absolute top-[60%] right-[15%] text-4xl animate-pulse opacity-25" style={{ animationDelay: '0.5s' }}>🚀</div>
+        <div className="absolute bottom-[20%] right-[30%] text-3xl animate-bounce opacity-30" style={{ animationDelay: '1.5s' }}>💡</div>
+        <div className="absolute top-[40%] left-[25%] text-4xl animate-pulse opacity-20" style={{ animationDelay: '2s' }}>🎉</div>
+      </div>
       
-      <div className="max-w-3xl w-full relative z-10">
+      <div className="max-w-3xl w-full relative z-10 rounded-3xl">
         {/* Success Animation */}
         <div className="text-center mb-12 animate-fade-in">
           <div className="inline-block relative mb-8">

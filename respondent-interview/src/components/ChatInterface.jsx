@@ -9,6 +9,8 @@ function ChatInterface({ sessionId, onComplete }) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [startTime] = useState(Date.now());
+  const [questionCount, setQuestionCount] = useState(0);
   const messagesEndRef = useRef(null);
 
   const {
@@ -79,6 +81,7 @@ function ChatInterface({ sessionId, onComplete }) {
         };
         setMessages([botMessage]);
         setCurrentQuestion(questionText);
+        setQuestionCount(1);
         
         // Don't speak here - let the useEffect handle it when voices are loaded
         console.log('First question loaded, waiting for voices...');
@@ -92,6 +95,7 @@ function ChatInterface({ sessionId, onComplete }) {
           timestamp: new Date().toISOString(),
         };
         setMessages([errorMessage]);
+        setQuestionCount(1);
         
         setTimeout(() => {
           console.log('Speaking error message...');
@@ -150,7 +154,17 @@ function ChatInterface({ sessionId, onComplete }) {
       
       if (isComplete) {
         // Interview is complete
-        const completionMsg = response.completion_message || response.summary || 'Thank you for completing the interview!';
+        const completionMsg = 'Thank you for completing the interview!';
+        
+        // Calculate duration in minutes
+        const durationMs = Date.now() - startTime;
+        const durationMinutes = Math.round(durationMs / 60000);
+        
+        // Count total questions (user messages = answers to questions)
+        const totalQuestions = messages.filter(m => m.sender === 'user').length + 1;
+        
+        // Standard summary message instead of backend summary
+        const standardSummary = 'Thank you for participating in this interview. Your responses have been recorded and will be reviewed by our team. We appreciate your time and valuable insights.';
         
         setTimeout(() => {
           console.log('Speaking completion message...');
@@ -159,8 +173,13 @@ function ChatInterface({ sessionId, onComplete }) {
         
         onComplete({
           message: completionMsg,
-          summary: response.summary,
-          incentive: response.incentive,
+          summary: standardSummary,
+          duration_minutes: durationMinutes,
+          total_questions: totalQuestions,
+          incentive: response.incentive || {
+            amount: 5.00,
+            payment_info: 'Your reward of $5.00 will be processed and credited to your account within 48 hours. Thank you for your participation!'
+          },
         });
       } else {
         const nextQuestionText = response.next_question || response.response?.text;
@@ -174,6 +193,7 @@ function ChatInterface({ sessionId, onComplete }) {
           };
           setMessages(prev => [...prev, botMessage]);
           setCurrentQuestion(nextQuestionText);
+          setQuestionCount(prev => prev + 1);
           
           // Automatically speak the next question with logging
           setTimeout(() => {
@@ -225,7 +245,7 @@ function ChatInterface({ sessionId, onComplete }) {
       <div className="chat-header">
         <h2>Interview in Progress</h2>
         <div className="question-counter">
-          Question {messages.filter(m => m.sender === 'user').length + 1}
+          Question {questionCount}
         </div>
       </div>
 

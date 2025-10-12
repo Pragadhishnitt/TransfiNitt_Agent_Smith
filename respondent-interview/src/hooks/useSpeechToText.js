@@ -21,10 +21,10 @@ export const useSpeechToText = () => {
       recognitionRef.current.interimResults = true; // Show interim results
       
       // Set to Indian English (en-IN) for better accent recognition
-      recognitionRef.current.lang = 'en-IN';
+      recognitionRef.current.lang = 'en-US';
       recognitionRef.current.maxAlternatives = 1;
 
-      console.log('Speech recognition configured for Indian English (en-IN)');
+      console.log('Speech recognition configured for US English (en-US)');
 
       // Handle results
       recognitionRef.current.onresult = (event) => {

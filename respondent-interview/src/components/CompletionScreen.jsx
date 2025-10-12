@@ -14,7 +14,7 @@ const CompletionScreen = ({ completionData }) => {
         <div className="celebration-icon icon-7">🎈</div>
         <div className="celebration-icon icon-8">🎁</div>
       </div>
-      
+
       <div className="completion-card">
         <div className="completion-header">
           <div className="success-animation">
@@ -45,6 +45,7 @@ const CompletionScreen = ({ completionData }) => {
               <span className="stat-value">{completionData.duration_minutes} mins</span>
             </div>
           </div>
+
           <div className="stat-item">
             <div className="stat-icon">❓</div>
             <div className="stat-content">
@@ -52,6 +53,7 @@ const CompletionScreen = ({ completionData }) => {
               <span className="stat-value">{completionData.total_questions}</span>
             </div>
           </div>
+
           <div className="stat-item">
             <div className="stat-icon">💰</div>
             <div className="stat-content">
@@ -66,14 +68,7 @@ const CompletionScreen = ({ completionData }) => {
             <span className="section-icon">💳</span>
             <h3>Payment Information</h3>
           </div>
-          <p>{completionData.incentive.payment_info}</p>
-        </div>
-
-        <div className="completion-actions">
-          <button className="close-button" onClick={() => window.close()}>
-            <span className="button-icon">🚀</span>
-            <span>Close Window</span>
-          </button>
+          <p>You will get $5 within the next 48 hours.</p>
         </div>
       </div>
     </div>

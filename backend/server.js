@@ -1096,6 +1096,110 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
   }
 });
 
+// Get completion rate and average duration stats (all templates)
+app.get('/api/insights/stats', verifyToken, async (req, res) => {
+  try {
+    // Get all sessions for the researcher
+    const allSessions = await prisma.session.findMany({
+      where: {
+        template: {
+          researcher_id: req.user.id
+        }
+      },
+      select: {
+        status: true,
+        duration_seconds: true
+      }
+    });
+
+    const totalSessions = allSessions.length;
+    const completedSessions = allSessions.filter(s => s.status === 'completed').length;
+
+    // Calculate completion rate
+    const completionRate = totalSessions > 0 
+      ? (completedSessions / totalSessions) * 100 
+      : 0;
+
+    // Calculate average duration from completed sessions
+    const completedSessionsWithDuration = allSessions.filter(
+      s => s.status === 'completed' && s.duration_seconds != null
+    );
+
+    const averageDuration = completedSessionsWithDuration.length > 0
+      ? completedSessionsWithDuration.reduce((sum, s) => sum + s.duration_seconds, 0) / completedSessionsWithDuration.length
+      : 0;
+
+    success(res, {
+      completion_rate: parseFloat(completionRate.toFixed(2)),
+      average_duration: Math.round(averageDuration),
+      total_sessions: totalSessions,
+      completed_sessions: completedSessions
+    });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch stats', 500);
+  }
+});
+
+// Get completion rate and average duration stats for a specific template
+app.get('/api/insights/stats/:template_id', verifyToken, async (req, res) => {
+  try {
+    const templateId = req.params.template_id;
+
+    // Verify template belongs to researcher
+    const template = await prisma.template.findFirst({
+      where: {
+        id: templateId,
+        researcher_id: req.user.id
+      }
+    });
+
+    if (!template) {
+      return error(res, 'NOT_FOUND', 'Template not found', 404);
+    }
+
+    // Get all sessions for this specific template
+    const allSessions = await prisma.session.findMany({
+      where: {
+        template_id: templateId
+      },
+      select: {
+        status: true,
+        duration_seconds: true
+      }
+    });
+
+    const totalSessions = allSessions.length;
+    const completedSessions = allSessions.filter(s => s.status === 'completed').length;
+
+    // Calculate completion rate
+    const completionRate = totalSessions > 0 
+      ? (completedSessions / totalSessions) * 100 
+      : 0;
+
+    // Calculate average duration from completed sessions
+    const completedSessionsWithDuration = allSessions.filter(
+      s => s.status === 'completed' && s.duration_seconds != null
+    );
+
+    const averageDuration = completedSessionsWithDuration.length > 0
+      ? completedSessionsWithDuration.reduce((sum, s) => sum + s.duration_seconds, 0) / completedSessionsWithDuration.length
+      : 0;
+
+    success(res, {
+      template_id: templateId,
+      template_title: template.title,
+      completion_rate: parseFloat(completionRate.toFixed(2)),
+      average_duration: Math.round(averageDuration),
+      total_sessions: totalSessions,
+      completed_sessions: completedSessions
+    });
+  } catch (err) {
+    console.error(err);
+    error(res, 'SERVER_ERROR', 'Failed to fetch template stats', 500);
+  }
+});
+
 // Get marketing research report for a specific template
 app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
   try {

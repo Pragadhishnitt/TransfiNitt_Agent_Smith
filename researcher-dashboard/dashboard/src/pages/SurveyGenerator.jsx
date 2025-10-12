@@ -157,19 +157,19 @@ const SurveyGenerator = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Survey Generator</h1>
-        <p className="text-gray-600">Generate structured surveys from your interview data</p>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-semibold text-gray-900">Survey Generator</h1>
+        <p className="text-gray-600 mt-1">Generate structured surveys from your interview data</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Configuration */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Survey Configuration</h3>
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 p-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Survey Configuration</h3>
             
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Template *
@@ -177,7 +177,7 @@ const SurveyGenerator = () => {
                 <select
                   value={selectedTemplate}
                   onChange={(e) => setSelectedTemplate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
                 >
                   <option value="">Choose a template</option>
                   {templates.map(template => (
@@ -196,26 +196,26 @@ const SurveyGenerator = () => {
                     </label>
                     <button
                       onClick={handleSelectAllSessions}
-                      className="text-sm text-blue-600 hover:text-blue-700"
+                      className="text-sm font-medium text-gray-900 hover:text-gray-700"
                     >
-                      Select All Completed
+                      Select All
                     </button>
                   </div>
                   
-                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white">
                     {sessions.map(session => (
-                      <label key={session.id} className="flex items-center p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                      <label key={session.id} className="flex items-center px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors">
                         <input
                           type="checkbox"
                           checked={selectedSessions.includes(session.id)}
                           onChange={() => handleSessionToggle(session.id)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          className="h-4 w-4 text-gray-900 focus:ring-gray-200 border-gray-300 rounded"
                         />
-                        <div className="ml-3 flex-1">
-                          <p className="text-sm font-medium text-gray-900">
+                        <div className="ml-3 flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
                             {session.respondent?.name || 'Anonymous'}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 truncate">
                             {session.template_title} • {session.status}
                           </p>
                         </div>
@@ -232,16 +232,16 @@ const SurveyGenerator = () => {
               <button
                 onClick={handleGenerateSurvey}
                 disabled={!selectedTemplate || loading}
-                className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-xl font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                     Generating...
                   </>
                 ) : (
                   <>
-                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    <FileSpreadsheet className="w-5 h-5" />
                     Generate Survey
                   </>
                 )}
@@ -251,24 +251,24 @@ const SurveyGenerator = () => {
         </div>
 
         {/* Generated Survey */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {generatedSurvey ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-white rounded-2xl border border-gray-100 p-8">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Generated Survey</h3>
                 {generatedSurvey.google_form_url && (
                   <button
                     onClick={handleCopyLink}
-                    className="flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                   >
                     {copied ? (
                       <>
-                        <CheckCircle className="w-4 h-4 mr-1" />
+                        <CheckCircle className="w-4 h-4" />
                         Copied!
                       </>
                     ) : (
                       <>
-                        <Copy className="w-4 h-4 mr-1" />
+                        <Copy className="w-4 h-4" />
                         Copy Link
                       </>
                     )}
@@ -276,26 +276,26 @@ const SurveyGenerator = () => {
                 )}
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {generatedSurvey.questions.map((question, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-2">
+                  <div key={index} className="border border-gray-100 rounded-xl p-4 bg-gray-50">
+                    <div className="flex items-start justify-between gap-3 mb-3">
                       <h4 className="text-sm font-medium text-gray-900 flex-1">
                         {question.question}
                       </h4>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getQuestionTypeColor(question.type)}`}>
+                      <span className={`px-2.5 py-1 text-xs font-medium rounded-lg flex-shrink-0 ${getQuestionTypeColor(question.type)}`}>
                         {getQuestionTypeLabel(question.type)}
                       </span>
                     </div>
                     
                     {question.options && (
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-500 mb-1">Options:</p>
-                        <div className="flex flex-wrap gap-1">
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-2">Options:</p>
+                        <div className="flex flex-wrap gap-1.5">
                           {question.options.map((option, optionIndex) => (
                             <span
                               key={optionIndex}
-                              className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
+                              className="px-2.5 py-1 bg-white border border-gray-200 text-gray-700 text-xs font-medium rounded-lg"
                             >
                               {option}
                             </span>
@@ -308,10 +308,10 @@ const SurveyGenerator = () => {
               </div>
 
               {generatedSurvey.google_form_url && (
-                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between">
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm font-medium text-green-800">Google Form Created</p>
+                      <p className="text-sm font-semibold text-green-800">Google Form Created</p>
                       <p className="text-xs text-green-600 mt-1">
                         Your survey has been automatically created in Google Forms
                       </p>
@@ -320,32 +320,34 @@ const SurveyGenerator = () => {
                       href={generatedSurvey.google_form_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center px-3 py-1 text-sm text-green-700 hover:text-green-800 hover:bg-green-100 rounded-lg transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100 rounded-lg transition-colors flex-shrink-0"
                     >
-                      <ExternalLink className="w-4 h-4 mr-1" />
+                      <ExternalLink className="w-4 h-4" />
                       Open Form
                     </a>
                   </div>
                 </div>
               )}
 
-              <div className="mt-6 flex space-x-3">
-                <button className="flex-1 flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export Questions
+              <div className="mt-6 flex gap-3">
+                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                  <Download className="w-4 h-4" />
+                  Export
                 </button>
-                <button className="flex-1 flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Create New Form
+                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+                  <ExternalLink className="w-4 h-4" />
+                  Create Form
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="text-center py-8">
-                <FileSpreadsheet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No Survey Generated</h3>
-                <p className="text-gray-500">
+            <div className="bg-white rounded-2xl border border-gray-100 p-8">
+              <div className="text-center py-12">
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 mx-auto mb-4">
+                  <FileSpreadsheet className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Survey Generated</h3>
+                <p className="text-gray-600 text-sm">
                   Select a template and generate a survey to see the results here.
                 </p>
               </div>

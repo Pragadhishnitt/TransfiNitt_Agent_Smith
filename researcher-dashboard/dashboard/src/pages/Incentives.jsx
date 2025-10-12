@@ -145,48 +145,48 @@ const Incentives = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Incentives Management</h1>
-        <p className="text-gray-600">Manage respondent incentives and payments</p>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-semibold text-gray-900">Incentives Management</h1>
+        <p className="text-gray-600 mt-1">Manage respondent incentives and payments</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Clock className="w-6 h-6 text-yellow-600" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-yellow-500 rounded-xl">
+              <Clock className="w-6 h-6 text-white" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Pending Payments</p>
-              <p className="text-2xl font-bold text-gray-900">{totalPending}</p>
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Pending Payments</p>
+              <p className="text-2xl font-semibold text-gray-900">{totalPending}</p>
               <p className="text-sm text-gray-500">${totalPendingAmount.toFixed(2)}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-green-500 rounded-xl">
+              <CheckCircle className="w-6 h-6 text-white" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Paid This Period</p>
-              <p className="text-2xl font-bold text-gray-900">{totalPaid}</p>
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Paid This Period</p>
+              <p className="text-2xl font-semibold text-gray-900">{totalPaid}</p>
               <p className="text-sm text-gray-500">${totalPaidAmount.toFixed(2)}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-blue-600" />
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gray-900 rounded-xl">
+              <DollarSign className="w-6 h-6 text-white" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Amount</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Total Amount</p>
+              <p className="text-2xl font-semibold text-gray-900">
                 ${(totalPendingAmount + totalPaidAmount).toFixed(2)}
               </p>
               <p className="text-sm text-gray-500">All incentives</p>
@@ -196,11 +196,11 @@ const Incentives = () => {
       </div>
 
       {/* Filters */}
-      <div className="mb-6 flex items-center space-x-4">
+      <div className="flex items-center">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
@@ -210,10 +210,12 @@ const Incentives = () => {
 
       {/* Incentives List */}
       {filteredIncentives.length === 0 ? (
-        <div className="text-center py-12">
-          <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No incentives found</h3>
-          <p className="text-gray-500">
+        <div className="text-center py-16">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 mx-auto mb-4">
+            <DollarSign className="w-10 h-10 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No incentives found</h3>
+          <p className="text-gray-600 text-sm">
             {statusFilter !== 'all' 
               ? 'No incentives with the selected status'
               : 'No incentives have been created yet'
@@ -221,87 +223,87 @@ const Incentives = () => {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-100">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Respondent
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Session
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Amount
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Date
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-8 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white divide-y divide-gray-100">
                 {filteredIncentives.map((incentive) => (
-                  <tr key={incentive.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                          <User className="w-4 h-4 text-blue-600" />
+                  <tr key={incentive.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-8 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-gray-900 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 text-white" />
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
                             {incentive.respondent.name}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs text-gray-500 truncate">
                             {incentive.respondent.email}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-8 py-4 text-sm font-medium text-gray-900">
                       {incentive.session_id}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-8 py-4 text-sm font-semibold text-gray-900">
                       ${incentive.amount.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(incentive.status)}`}>
+                    <td className="px-8 py-4">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium ${getStatusColor(incentive.status)}`}>
                         {incentive.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-8 py-4 text-sm text-gray-600">
                       {incentive.status === 'paid' && incentive.paid_at
                         ? formatDate(incentive.paid_at)
                         : formatDate(incentive.created_at)
                       }
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-8 py-4">
                       {incentive.status === 'pending' ? (
                         <button
                           onClick={() => handleMarkAsPaid(incentive.id)}
                           disabled={processing === incentive.id}
-                          className="flex items-center text-green-600 hover:text-green-900 disabled:opacity-50"
+                          className="flex items-center gap-1.5 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                         >
                           {processing === incentive.id ? (
                             <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
                               Processing...
                             </>
                           ) : (
                             <>
-                              <CheckCircle className="w-4 h-4 mr-1" />
+                              <CheckCircle className="w-4 h-4" />
                               Mark as Paid
                             </>
                           )}
                         </button>
                       ) : (
-                        <span className="text-gray-400">Completed</span>
+                        <span className="text-sm text-gray-400">Completed</span>
                       )}
                     </td>
                   </tr>

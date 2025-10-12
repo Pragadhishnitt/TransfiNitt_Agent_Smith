@@ -21,9 +21,9 @@ const RecentActivity = ({ activities = [] }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 px-6 py-4">
+        <h3 className="font-medium text-gray-900">Recent Activity</h3>
       </div>
       
       <div className="divide-y divide-gray-200">
@@ -35,23 +35,23 @@ const RecentActivity = ({ activities = [] }) => {
           activities.map((activity, index) => (
             <div key={index} className="px-6 py-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center gap-3">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <MessageSquare className="w-4 h-4 text-blue-600" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500">
+                      <MessageSquare className="w-4 h-4 text-white" />
                     </div>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">
                       {activity.template_title}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-600">
                       {activity.respondent?.name || 'Anonymous'}
                     </p>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center gap-4">
                   <div className="text-right">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(activity.status)}`}>
                       {activity.status}

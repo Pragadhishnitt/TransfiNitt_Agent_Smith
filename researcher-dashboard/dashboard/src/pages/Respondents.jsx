@@ -208,43 +208,45 @@ const Respondents = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Respondents</h1>
-          <p className="text-gray-600">Manage your research panel</p>
+          <h1 className="text-3xl font-semibold text-gray-900">Respondents</h1>
+          <p className="text-gray-600 mt-1">Manage your research panel</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-6 py-2.5 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-5 h-5" />
           Add Respondent
         </button>
       </div>
 
       {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
+      <div className="max-w-md">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
             placeholder="Search respondents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="pl-9 pr-4 py-2.5 w-full text-sm border border-gray-200 bg-gray-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 focus:bg-white transition-all"
           />
         </div>
       </div>
 
       {/* Respondents Grid */}
       {filteredRespondents.length === 0 ? (
-        <div className="text-center py-12">
-          <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+        <div className="text-center py-16">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 mx-auto mb-4">
+            <User className="w-10 h-10 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
             {searchTerm ? 'No respondents found' : 'No respondents yet'}
           </h3>
-          <p className="text-gray-500 mb-6">
+          <p className="text-gray-600 text-sm mb-6">
             {searchTerm 
               ? 'Try adjusting your search terms'
               : 'Add respondents to build your research panel'
@@ -253,72 +255,70 @@ const Respondents = () => {
           {!searchTerm && (
             <button
               onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-2.5 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
             >
               Add Respondent
             </button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredRespondents.map((respondent) => (
-            <div key={respondent.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                    <User className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{respondent.name}</h3>
-                    <p className="text-sm text-gray-500">{respondent.email}</p>
-                  </div>
+            <div key={respondent.id} className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <User className="w-6 h-6 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-semibold text-gray-900 truncate">{respondent.name}</h3>
+                  <p className="text-sm text-gray-600 truncate">{respondent.email}</p>
                 </div>
               </div>
 
               {/* Demographics */}
-              <div className="mb-4 space-y-2">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {respondent.demographics?.age_range || 'Not specified'}
+              <div className="mb-4 p-4 bg-gray-50 rounded-xl space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{respondent.demographics?.age_range || 'Not specified'}</span>
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  {respondent.demographics?.location || 'Not specified'}
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <MapPin className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{respondent.demographics?.location || 'Not specified'}</span>
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Briefcase className="w-4 h-4 mr-2" />
-                  {respondent.demographics?.occupation || 'Not specified'}
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Briefcase className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{respondent.demographics?.occupation || 'Not specified'}</span>
                 </div>
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="text-center">
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center bg-gray-50 rounded-xl p-3">
                   <p className="text-lg font-semibold text-gray-900">{respondent.participation_count}</p>
-                  <p className="text-xs text-gray-500">Interviews</p>
+                  <p className="text-xs text-gray-600">Interviews</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center bg-gray-50 rounded-xl p-3">
                   <p className="text-lg font-semibold text-gray-900">
                     ${(respondent.total_incentives || 0).toFixed(2)}
                   </p>
-                  <p className="text-xs text-gray-500">Earned</p>
+                  <p className="text-xs text-gray-600">Earned</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center bg-gray-50 rounded-xl p-3">
                   <p className={`text-lg font-semibold ${getSentimentColor(respondent.avg_sentiment || 0)}`}>
                     {((respondent.avg_sentiment || 0) * 100).toFixed(0)}%
                   </p>
-                  <p className="text-xs text-gray-500">Sentiment</p>
+                  <p className="text-xs text-gray-600">Sentiment</p>
                 </div>
               </div>
 
               {/* Behavior Tags */}
               {respondent.behavior_tags && respondent.behavior_tags.length > 0 && (
                 <div className="mb-4">
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {respondent.behavior_tags.map((tag, index) => (
                       <span
                         key={index}
-                        className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+                        className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg"
                       >
                         {tag.replace('_', ' ')}
                       </span>
@@ -328,11 +328,11 @@ const Respondents = () => {
               )}
 
               {/* Actions */}
-              <div className="flex space-x-2">
-                <button className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors">
+              <div className="flex gap-2">
+                <button className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
                   View Profile
                 </button>
-                <button className="flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                <button className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
                   Edit
                 </button>
               </div>
@@ -343,13 +343,13 @@ const Respondents = () => {
 
       {/* Add Respondent Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Add New Respondent</h2>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full">
+            <div className="px-8 py-6 border-b border-gray-100">
+              <h2 className="text-2xl font-semibold text-gray-900">Add New Respondent</h2>
             </div>
 
-            <form onSubmit={handleCreateRespondent} className="p-6 space-y-4">
+            <form onSubmit={handleCreateRespondent} className="p-8 space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Name *
@@ -360,7 +360,7 @@ const Respondents = () => {
                   required
                   value={formData.name}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
                   placeholder="Enter full name"
                 />
               </div>
@@ -375,7 +375,7 @@ const Respondents = () => {
                   required
                   value={formData.email}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
                   placeholder="Enter email address"
                 />
               </div>
@@ -388,7 +388,7 @@ const Respondents = () => {
                   name="demographics.age_range"
                   value={formData.demographics.age_range}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
                 >
                   <option value="">Select age range</option>
                   <option value="18-24">18-24</option>
@@ -409,7 +409,7 @@ const Respondents = () => {
                   name="demographics.location"
                   value={formData.demographics.location}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
                   placeholder="Enter location"
                 />
               </div>
@@ -423,22 +423,22 @@ const Respondents = () => {
                   name="demographics.occupation"
                   value={formData.demographics.occupation}
                   onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
                   placeholder="Enter occupation"
                 />
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-4">
+              <div className="flex items-center gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-black hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   Add Respondent
                 </button>

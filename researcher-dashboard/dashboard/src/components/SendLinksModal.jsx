@@ -195,34 +195,34 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">Send Interview Links</h2>
-            <p className="text-gray-600 mt-1">Template: {templateTitle}</p>
+            <p className="text-gray-600 mt-1 text-sm">Template: {templateTitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Filters */}
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="px-8 py-5 border-b border-gray-100 bg-gray-50">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
             {/* Search */}
-            <div className="relative">
+            <div className="relative md:col-span-2">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search by name, email, location..."
+                placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                className="pl-9 w-full px-3 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
               />
             </div>
 
@@ -230,7 +230,7 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
             <select
               value={ageFilter}
               onChange={(e) => setAgeFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              className="px-3 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             >
               <option value="">All Ages</option>
               <option value="18-25">18-25</option>
@@ -244,7 +244,7 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
             <select
               value={genderFilter}
               onChange={(e) => setGenderFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              className="px-3 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             >
               <option value="">All Genders</option>
               <option value="male">Male</option>
@@ -258,50 +258,54 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
               placeholder="Location..."
               value={locationFilter}
               onChange={(e) => setLocationFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              className="px-3 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             />
 
-            {/* Participation Filter */}
+            {/* Results Count */}
+            <div className="flex items-center justify-center px-3 py-2 bg-gray-900 rounded-lg">
+              <span className="text-sm font-medium text-white">
+                {filteredRespondents.length} found
+              </span>
+            </div>
+          </div>
+
+          {/* Participation Filter - Full Width Second Row */}
+          <div className="mt-3">
             <select
               value={participationFilter}
               onChange={(e) => setParticipationFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              className="w-full md:w-auto px-3 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
             >
-              <option value="">All Experience</option>
+              <option value="">All Experience Levels</option>
               <option value="new">New (0 interviews)</option>
               <option value="experienced">Experienced (1-5)</option>
               <option value="expert">Expert (5+)</option>
             </select>
-
-            {/* Results Count */}
-            <div className="flex items-center justify-center px-3 py-2 bg-blue-50 rounded-xl">
-              <span className="text-sm font-medium text-blue-700">
-                {filteredRespondents.length} available
-              </span>
-            </div>
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-96">
+        <div className="px-8 py-6 overflow-y-auto max-h-96">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl">
+              <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="w-8 h-8 animate-spin text-blue-600" />
-              <span className="ml-2 text-gray-600">Loading respondents...</span>
+            <div className="flex items-center justify-center py-16">
+              <Loader className="w-6 h-6 animate-spin text-gray-900" />
+              <span className="ml-3 text-gray-600">Loading respondents...</span>
             </div>
           ) : filteredRespondents.length === 0 ? (
-            <div className="text-center py-12">
-              <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <div className="text-center py-16">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 mx-auto mb-4">
+                <User className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 {searchTerm || ageFilter || genderFilter ? 'No matching respondents' : 'No available respondents'}
               </h3>
-              <p className="text-gray-500">
+              <p className="text-gray-600 text-sm">
                 {searchTerm || ageFilter || genderFilter 
                   ? 'Try adjusting your filters'
                   : 'All respondents have already participated in this template'
@@ -320,14 +324,14 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
                     className={`p-4 rounded-xl border transition-all duration-200 ${
                       isSent 
                         ? 'bg-green-50 border-green-200' 
-                        : 'bg-white border-gray-200 hover:border-gray-300'
+                        : 'bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center">
+                            <span className="text-white font-semibold text-sm">
                               {(respondent.name || respondent.email).charAt(0).toUpperCase()}
                             </span>
                           </div>
@@ -340,61 +344,61 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
                         </div>
 
                         {/* Demographics */}
-                        <div className="flex items-center space-x-4 text-xs text-gray-500 ml-13">
+                        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 ml-13">
                           {respondent.demographics?.age && (
-                            <div className="flex items-center">
-                              <Calendar className="w-3 h-3 mr-1" />
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
                               {respondent.demographics.age} years
                             </div>
                           )}
                           {respondent.demographics?.gender && (
-                            <div className="flex items-center">
-                              <User className="w-3 h-3 mr-1" />
+                            <div className="flex items-center gap-1">
+                              <User className="w-3 h-3" />
                               {respondent.demographics.gender}
                             </div>
                           )}
                           {respondent.demographics?.location && (
-                            <div className="flex items-center">
-                              <MapPin className="w-3 h-3 mr-1" />
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
                               {respondent.demographics.location}
                             </div>
                           )}
                           {respondent.demographics?.occupation && (
-                            <div className="flex items-center">
-                              <Briefcase className="w-3 h-3 mr-1" />
+                            <div className="flex items-center gap-1">
+                              <Briefcase className="w-3 h-3" />
                               {respondent.demographics.occupation}
                             </div>
                           )}
                           {respondent.participation_count > 0 && (
-                            <div className="flex items-center">
-                              <span className="w-2 h-2 bg-blue-500 rounded-full mr-1"></span>
+                            <div className="flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
                               {respondent.participation_count} interviews
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center">
                         {isSent ? (
-                          <div className="flex items-center px-3 py-2 bg-green-100 text-green-700 rounded-lg">
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            <span className="text-sm font-medium">Link Sent!</span>
+                          <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="text-sm font-medium">Sent</span>
                           </div>
                         ) : (
                           <button
                             onClick={() => handleSendLink(respondent)}
                             disabled={isSending}
-                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             {isSending ? (
                               <>
-                                <Loader className="w-4 h-4 mr-2 animate-spin" />
-                                Sending...
+                                <Loader className="w-4 h-4 animate-spin" />
+                                <span className="text-sm font-medium">Sending...</span>
                               </>
                             ) : (
                               <>
-                                <Send className="w-4 h-4 mr-2" />
-                                Send Link
+                                <Send className="w-4 h-4" />
+                                <span className="text-sm font-medium">Send</span>
                               </>
                             )}
                           </button>
@@ -409,14 +413,14 @@ const SendLinksModal = ({ isOpen, onClose, templateId, templateTitle }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
+        <div className="px-8 py-5 border-t border-gray-100 bg-gray-50">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
               Links are automatically copied to clipboard when sent
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="px-5 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
             >
               Close
             </button>

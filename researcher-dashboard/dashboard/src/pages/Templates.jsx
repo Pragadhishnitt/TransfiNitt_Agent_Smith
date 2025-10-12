@@ -200,23 +200,23 @@ const Templates = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+   <div className="space-y-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Templates</h1>
-          <p className="text-gray-600">Manage your interview templates</p>
+          <h1 className="text-3xl font-semibold text-gray-900">Templates</h1>
+          <p className="text-gray-600 mt-1">Manage your interview templates</p>
         </div>
         <button
           onClick={handleCreateTemplate}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-black px-6 py-2.5 font-medium text-white hover:bg-gray-800 transition-colors"
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-5 h-5" />
           Create Template
         </button>
       </div>
 
       {/* Search and Filters */}
-      <div className="mb-6 flex items-center space-x-4">
+      <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
@@ -224,25 +224,25 @@ const Templates = () => {
             placeholder="Search templates..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-10 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-300 focus:bg-white focus:ring-2 focus:ring-gray-200"
           />
         </div>
-        <button className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          <Filter className="w-4 h-4 mr-2" />
+        <button className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          <Filter className="w-4 h-4" />
           Filter
         </button>
       </div>
 
       {/* Templates Grid */}
       {filteredTemplates.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Plus className="w-8 h-8 text-gray-400" />
+        <div className="text-center py-16">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 mx-auto mb-4">
+            <Plus className="w-10 h-10 text-gray-400" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
             {searchTerm ? 'No templates found' : 'No templates yet'}
           </h3>
-          <p className="text-gray-500 mb-6">
+          <p className="text-gray-600 mb-6">
             {searchTerm 
               ? 'Try adjusting your search terms'
               : 'Create your first interview template to get started'
@@ -251,14 +251,15 @@ const Templates = () => {
           {!searchTerm && (
             <button
               onClick={handleCreateTemplate}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-black px-6 py-2.5 font-medium text-white hover:bg-gray-800 transition-colors mx-auto"
             >
-              Create Template
+              <Plus className="w-5 h-5" />
+              Create Your First Template
             </button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredTemplates.map((template) => (
             <TemplateCard
               key={template.id}

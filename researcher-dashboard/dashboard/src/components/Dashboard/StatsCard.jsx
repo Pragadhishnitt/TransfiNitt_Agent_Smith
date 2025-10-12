@@ -18,7 +18,7 @@ const StatsCard = ({ title, value, change, changeType, icon: Icon, color = 'blue
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="rounded-lg border border-gray-200 bg-white px-6 py-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
@@ -34,7 +34,7 @@ const StatsCard = ({ title, value, change, changeType, icon: Icon, color = 'blue
             </div>
           )}
         </div>
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-full ${colorClasses[color]}`}>
           <Icon className="w-6 h-6 text-white" />
         </div>
       </div>

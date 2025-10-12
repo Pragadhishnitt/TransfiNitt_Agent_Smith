@@ -168,12 +168,12 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="space-y-6">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="h-8 bg-gray rounded w-1/4 mb-6"></div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+              <div key={i} className="h-32 bg-gray rounded-sm"></div>
             ))}
           </div>
         </div>
@@ -182,90 +182,92 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="p-6 space-y-8">
+    <div className="space-y-8">
       {/* Welcome Section */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-8">
+      <div className="rounded-2xl bg-gradient-to-br from-gray-50 to-white px-8 py-8 border border-gray-100">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-semibold text-gray-900 mb-2">
-              Welcome back, {user?.name || 'Researcher'}!
+              Welcome back, {user?.name || 'Researcher'}
             </h1>
-            <p className="text-gray-600 text-lg">
+            <p className="text-gray-600 text-base">
               Here's what's happening with your AI interviews today
             </p>
           </div>
           <div className="hidden md:block">
-            <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center">
-              <BarChart3 className="w-10 h-10 text-gray-600" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-900">
+              <BarChart3 className="w-8 h-8 text-white" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm font-medium">Total Interviews</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.totalInterviews}</p>
+              <p className="text-gray-600 text-sm font-medium mb-2">Total Interviews</p>
+              <p className="text-3xl font-semibold text-gray-900">{stats.totalInterviews}</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500">
+              <FileText className="w-6 h-6 text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+        <div className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm font-medium">Avg Sentiment</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.avgSentiment}%</p>
+              <p className="text-gray-600 text-sm font-medium mb-2">Avg Sentiment</p>
+              <p className="text-3xl font-semibold text-gray-900">{stats.avgSentiment}%</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-green-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500">
+              <BarChart3 className="w-6 h-6 text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+        <div className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm font-medium">Completion Rate</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.completionRate}%</p>
+              <p className="text-gray-600 text-sm font-medium mb-2">Completion Rate</p>
+              <p className="text-3xl font-semibold text-gray-900">{stats.completionRate}%</p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500">
+              <Users className="w-6 h-6 text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200">
+        <div className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm font-medium">Active Sessions</p>
-              <p className="text-3xl font-bold text-gray-900">{stats.activeSessions}</p>
-              <p className="text-gray-500 text-sm">
+              <p className="text-gray-600 text-sm font-medium mb-2">Active Sessions</p>
+              <p className="text-3xl font-semibold text-gray-900">{stats.activeSessions}</p>
+              <p className="text-gray-500 text-sm mt-1">
                 {stats.pendingSessions > 0 ? `${stats.pendingSessions} pending` : 'Live interviews'}
               </p>
             </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-              <Clock className="w-6 h-6 text-orange-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500">
+              <Clock className="w-6 h-6 text-white" />
             </div>
           </div>
         </div>
       </div>
 
-        {/* Recent Activity */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
-          <button className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
-            View All
-          </button>
+      {/* Recent Activity */}
+      <div className="rounded-2xl bg-white border border-gray-100">
+        <div className="px-8 py-5 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+            <button className="text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors">
+              View All
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="divide-y divide-gray-100">
           {recentSessions.length > 0 ? (
             recentSessions.map((session) => {
               const isCompleted = session.status === 'completed' && session.completed_at;
@@ -275,30 +277,30 @@ const Dashboard = () => {
               return (
                 <div 
                   key={session.id} 
-                  className={`bg-gray-50 rounded-xl transition-all duration-300 overflow-hidden ${
-                    isExpanded ? 'bg-white shadow-md' : 'hover:bg-gray-100'
+                  className={`px-8 py-5 transition-all duration-200 ${
+                    isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'
                   }`}
                 >
                   <div 
                     onClick={() => fetchSessionDetails(session.id)}
-                    className="flex items-center space-x-4 p-4 cursor-pointer"
+                    className="flex items-center gap-4 cursor-pointer"
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      isCompleted ? 'bg-green-100' : isActive ? 'bg-blue-100' : 'bg-gray-100'
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                      isCompleted ? 'bg-green-500' : isActive ? 'bg-blue-500' : 'bg-gray-500'
                     }`}>
                       {isCompleted ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <CheckCircle className="w-6 h-6 text-white" />
                       ) : isActive ? (
-                        <Clock className="w-5 h-5 text-blue-600" />
+                        <Clock className="w-6 h-6 text-white" />
                       ) : (
-                        <FileText className="w-5 h-5 text-gray-600" />
+                        <FileText className="w-6 h-6 text-white" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-gray-900 text-base">
                         {session.template_title} {isCompleted ? 'completed' : isActive ? 'in progress' : 'pending'}
                       </p>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 mt-0.5">
                         {session.respondent?.name || session.respondent?.email?.split('@')[0] || 'Anonymous'} • {
                           isCompleted 
                             ? new Date(session.completed_at).toLocaleString()
@@ -308,18 +310,18 @@ const Dashboard = () => {
                         }
                       </p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    <div className="flex items-center gap-3">
+                      <span className={`px-3 py-1 text-xs font-medium rounded-lg ${
                         isCompleted 
-                          ? 'bg-green-100 text-green-800' 
+                          ? 'bg-green-100 text-green-700' 
                           : isActive 
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-700'
                       }`}>
                         {isCompleted ? 'Completed' : isActive ? 'Active' : 'Pending'}
                       </span>
                       {isCompleted && session.sentiment_score && (
-                        <span className="text-sm font-medium text-green-600">
+                        <span className="text-sm font-semibold text-green-600">
                           {Math.round(session.sentiment_score * 100)}%
                         </span>
                       )}
@@ -328,63 +330,63 @@ const Dashboard = () => {
                   
                   {/* Expanded Details */}
                   {isExpanded && sessionDetails && (
-                    <div className="px-4 pb-4 border-t border-gray-200">
-                      <div className="pt-4 space-y-4">
+                    <div className="ml-15 mt-5 pt-5 border-t border-gray-100">
+                      <div className="space-y-4">
                         {/* Session Info */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center space-x-2 mb-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-2 mb-2">
                               <FileText className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Template</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Template</span>
                             </div>
-                            <p className="font-medium text-gray-900 text-sm">{sessionDetails.template?.title}</p>
-                            <p className="text-xs text-gray-600">{sessionDetails.template?.topic}</p>
+                            <p className="font-medium text-gray-900">{sessionDetails.template?.title}</p>
+                            <p className="text-sm text-gray-600 mt-0.5">{sessionDetails.template?.topic}</p>
                           </div>
                           
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center space-x-2 mb-1">
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-2 mb-2">
                               <User className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Respondent</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Respondent</span>
                             </div>
-                            <p className="font-medium text-gray-900 text-sm">{sessionDetails.respondent?.email}</p>
+                            <p className="font-medium text-gray-900">{sessionDetails.respondent?.email}</p>
                           </div>
                         </div>
 
                         {/* Status and Timing */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center space-x-2 mb-1">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-2 mb-2">
                               <Clock className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Status</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Status</span>
                             </div>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            <span className={`inline-block px-3 py-1 text-xs font-medium rounded-lg ${
                               sessionDetails.status === 'completed' 
-                                ? 'bg-green-100 text-green-800' 
+                                ? 'bg-green-100 text-green-700' 
                                 : sessionDetails.status === 'active'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-gray-100 text-gray-800'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-gray-100 text-gray-700'
                             }`}>
                               {sessionDetails.status}
                             </span>
                           </div>
                           
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center space-x-2 mb-1">
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-2 mb-2">
                               <Calendar className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Started</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Started</span>
                             </div>
-                            <p className="text-xs text-gray-900">
+                            <p className="text-sm text-gray-900">
                               {new Date(sessionDetails.started_at).toLocaleString()}
                             </p>
                           </div>
                           
                           {sessionDetails.completed_at && (
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center space-x-2 mb-1">
+                            <div className="bg-gray-50 rounded-xl p-4">
+                              <div className="flex items-center space-x-2 mb-2">
                                 <CheckCircle className="w-4 h-4 text-gray-600" />
-                                <span className="text-xs font-medium text-gray-600">Completed</span>
+                                <span className="text-xs font-medium text-gray-600 uppercase">Completed</span>
                               </div>
-                              <p className="text-xs text-gray-900">
+                              <p className="text-sm text-gray-900">
                                 {new Date(sessionDetails.completed_at).toLocaleString()}
                               </p>
                             </div>
@@ -393,19 +395,19 @@ const Dashboard = () => {
 
                         {/* Sentiment Score */}
                         {sessionDetails.sentiment_score && (
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center space-x-2 mb-2">
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-2 mb-3">
                               <BarChart3 className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Sentiment Score</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Sentiment Score</span>
                             </div>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-3">
                               <div className="flex-1 bg-gray-200 rounded-full h-2">
                                 <div 
                                   className="bg-green-500 h-2 rounded-full transition-all duration-300"
                                   style={{ width: `${sessionDetails.sentiment_score * 100}%` }}
                                 ></div>
                               </div>
-                              <span className="text-xs font-medium text-gray-900">
+                              <span className="text-sm font-semibold text-gray-900">
                                 {Math.round(sessionDetails.sentiment_score * 100)}%
                               </span>
                             </div>
@@ -414,25 +416,25 @@ const Dashboard = () => {
 
                         {/* Summary */}
                         {sessionDetails.summary && (
-                          <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="bg-gray-50 rounded-xl p-4">
                             <div className="flex items-center space-x-2 mb-2">
                               <MessageSquare className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Summary</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Summary</span>
                             </div>
-                            <p className="text-xs text-gray-900">{sessionDetails.summary}</p>
+                            <p className="text-sm text-gray-900 leading-relaxed">{sessionDetails.summary}</p>
                           </div>
                         )}
 
                         {/* Key Themes */}
                         {sessionDetails.key_themes && sessionDetails.key_themes.length > 0 && (
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center space-x-2 mb-2">
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-2 mb-3">
                               <MessageSquare className="w-4 h-4 text-gray-600" />
-                              <span className="text-xs font-medium text-gray-600">Key Themes</span>
+                              <span className="text-xs font-medium text-gray-600 uppercase">Key Themes</span>
                             </div>
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-2">
                               {sessionDetails.key_themes.map((theme, index) => (
-                                <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                <span key={index} className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-lg">
                                   {theme}
                                 </span>
                               ))}
@@ -442,35 +444,33 @@ const Dashboard = () => {
                       </div>
                     </div>
                   )}
-                  </div>
+                </div>
               );
             })
           ) : (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="px-8 py-12 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 mx-auto mb-4">
                 <FileText className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No recent activity</h3>
-              <p className="text-gray-500">Start creating templates and conducting interviews to see activity here.</p>
-          </div>
+              <h3 className="font-semibold text-gray-900 mb-2">No recent activity</h3>
+              <p className="text-gray-600 text-sm">Start creating templates and conducting interviews to see activity here.</p>
+            </div>
           )}
         </div>
       </div>
 
-
-
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <button 
           onClick={() => handleQuickAction('create-template')} 
-          className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200 text-left group"
+          className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg hover:scale-105 transition-all duration-200 text-left group"
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-              <Plus className="w-6 h-6 text-blue-600" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500 group-hover:bg-blue-600 transition-colors">
+              <Plus className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">Create Template</p>
+              <p className="font-semibold text-gray-900 mb-0.5">Create Template</p>
               <p className="text-gray-600 text-sm">Design new interview</p>
             </div>
           </div>
@@ -478,14 +478,14 @@ const Dashboard = () => {
 
         <button 
           onClick={() => handleQuickAction('view-respondents')} 
-          className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200 text-left group"
+          className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg hover:scale-105 transition-all duration-200 text-left group"
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
-              <Users className="w-6 h-6 text-green-600" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500 group-hover:bg-green-600 transition-colors">
+              <Users className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">View Respondents</p>
+              <p className="font-semibold text-gray-900 mb-0.5">View Respondents</p>
               <p className="text-gray-600 text-sm">Manage panel</p>
             </div>
           </div>
@@ -493,14 +493,14 @@ const Dashboard = () => {
 
         <button 
           onClick={() => handleQuickAction('generate-survey')} 
-          className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200 text-left group"
+          className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg hover:scale-105 transition-all duration-200 text-left group"
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-              <BarChart3 className="w-6 h-6 text-purple-600" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500 group-hover:bg-purple-600 transition-colors">
+              <BarChart3 className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">Generate Survey</p>
+              <p className="font-semibold text-gray-900 mb-0.5">Generate Survey</p>
               <p className="text-gray-600 text-sm">Create from data</p>
             </div>
           </div>
@@ -508,14 +508,14 @@ const Dashboard = () => {
 
         <button 
           onClick={() => handleQuickAction('view-sessions')} 
-          className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-md transition-all duration-200 text-left group"
+          className="rounded-2xl bg-white px-6 py-6 border border-gray-100 hover:shadow-lg hover:scale-105 transition-all duration-200 text-left group"
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-              <FileText className="w-6 h-6 text-orange-600" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500 group-hover:bg-orange-600 transition-colors">
+              <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">View Sessions</p>
+              <p className="font-semibold text-gray-900 mb-0.5">View Sessions</p>
               <p className="text-gray-600 text-sm">Monitor interviews</p>
             </div>
           </div>

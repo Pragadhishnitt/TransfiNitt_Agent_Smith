@@ -105,21 +105,21 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
 
   return (
     <>
-      <div className={`bg-white rounded-lg shadow-sm border mr-1.5 border-gray-200 p-6 hover:shadow-md transition-all duration-300 ${
-        expanded ? 'shadow-lg' : ''
+      <div className={`rounded-2xl border border-gray-100 bg-white px-6 py-6 transition-all duration-300 ${
+        expanded ? 'shadow-lg' : 'hover:shadow-md'
       }`}>
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{template.title}</h3>
-            <p className="text-sm text-gray-600 mb-3">{template.topic}</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">{template.title}</h3>
+            <p className="text-sm text-gray-600 mb-4">{template.topic}</p>
             
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <div className="flex items-center">
-                <Calendar className="w-4 h-4 mr-1" />
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-1">
+                <Calendar className="w-4 h-4" />
                 {template.created_at ? formatDate(template.created_at) : 'Just now'}
               </div>
-              <div className="flex items-center">
-                <Users className="w-4 h-4 mr-1" />
+              <div className="flex items-center gap-1">
+                <Users className="w-4 h-4" />
                 {template.interview_count || 0} interviews
               </div>
             </div>
@@ -127,17 +127,17 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
         </div>
 
         {template.starter_questions && template.starter_questions.length > 0 && (
-          <div className="mb-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Starter Questions:</p>
-            <ul className="text-sm text-gray-600 space-y-1">
+          <div className="mb-4 p-4 bg-gray-50 rounded-xl">
+            <p className="text-sm font-medium text-gray-700 mb-2">Starter Questions</p>
+            <ul className="text-sm text-gray-600 space-y-2">
               {template.starter_questions.slice(0, 2).map((question, index) => (
                 <li key={index} className="flex items-start">
-                  <span className="text-gray-400 mr-2">•</span>
+                  <span className="text-gray-400 mr-2 mt-0.5">•</span>
                   <span className="line-clamp-2">{question}</span>
                 </li>
               ))}
               {template.starter_questions.length > 2 && (
-                <li className="text-gray-500 text-xs">
+                <li className="text-gray-500 text-xs mt-2">
                   +{template.starter_questions.length - 2} more questions
                 </li>
               )}
@@ -147,19 +147,19 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
 
         {/* Expandable Sessions Section */}
         {expanded && (
-          <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-medium text-gray-900">Session Details</h4>
+              <h4 className="font-semibold text-gray-900">Session Details</h4>
               <span className="text-sm text-gray-500">{sessions.length} sessions</span>
             </div>
             
             {sessionsLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
                 <span className="ml-2 text-sm text-gray-600">Loading sessions...</span>
               </div>
             ) : sessions.length === 0 ? (
-              <div className="text-center py-4">
+              <div className="text-center py-6">
                 <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                 <p className="text-sm text-gray-500">No sessions yet</p>
               </div>
@@ -171,17 +171,17 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
                   const isPending = session.status === 'pending';
 
                   return (
-                    <div key={session.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          isCompleted ? 'bg-green-100' : isActive ? 'bg-blue-100' : 'bg-gray-100'
+                    <div key={session.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-gray-200 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                          isCompleted ? 'bg-green-500' : isActive ? 'bg-blue-500' : 'bg-gray-400'
                         }`}>
                           {isCompleted ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
+                            <CheckCircle className="w-5 h-5 text-white" />
                           ) : isActive ? (
-                            <Clock className="w-4 h-4 text-blue-600" />
+                            <Clock className="w-5 h-5 text-white" />
                           ) : (
-                            <FileText className="w-4 h-4 text-gray-600" />
+                            <FileText className="w-5 h-5 text-white" />
                           )}
                         </div>
                         <div>
@@ -198,12 +198,12 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
                           </p>
                         </div>
                       </div>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      <span className={`px-3 py-1 text-xs font-medium rounded-lg ${
                         isCompleted
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-100 text-green-700'
                           : isActive
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-700'
                       }`}>
                         {session.status}
                       </span>
@@ -215,80 +215,83 @@ const TemplateCard = ({ template, onView, onEdit, onDelete }) => {
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-          <div className="flex space-x-2">
+        <div className="flex flex-col gap-3 pt-4 border-t border-gray-100">
+          {/* Primary Actions */}
+          <div className="flex items-center gap-2">
             <button
               onClick={handleViewTemplate}
-              className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
             >
               {expanded ? (
                 <>
-                  <ChevronUp className="w-4 h-4 mr-1" />
+                  <ChevronUp className="w-4 h-4" />
                   Hide Sessions
                 </>
               ) : (
                 <>
-                  <ChevronDown className="w-4 h-4 mr-1" />
+                  <ChevronDown className="w-4 h-4" />
                   View Sessions
                 </>
               )}
             </button>
             <button
               onClick={() => onEdit(template)}
-              className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+              className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
             >
               Edit
             </button>
           </div>
           
-          <div className="flex items-center space-x-2">
+          {/* Secondary Actions */}
+          <div className="flex items-center gap-2">
             <button
               onClick={handleSendLinks}
-              className="flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
             >
-              <Send className="w-4 h-4 mr-1" />
-              Send Links
+              <Send className="w-4 h-4" />
+              Send
             </button>
             
             <button
               onClick={handleGenerateLink}
-              className="flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors"
             >
-              <Copy className="w-4 h-4 mr-1" />
-              Generate Link
+              <Copy className="w-4 h-4" />
+              Link
             </button>
-            
-            {generatedLink && (
-              <>
-                <button
-                  onClick={handleCopyLink}
-                  className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-                >
-                  {copied ? (
-                    <>
-                      <span className="w-4 h-4 mr-1">✓</span>
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-1" />
-                      Copy Link
-                    </>
-                  )}
-                </button>
-                
-                <a
-                  href={generatedLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-md transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 mr-1" />
-                  Open
-                </a>
-              </>
-            )}
           </div>
+
+          {/* Generated Link Actions */}
+          {generatedLink && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyLink}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                {copied ? (
+                  <>
+                    <span className="text-sm">✓</span>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy
+                  </>
+                )}
+              </button>
+              
+              <a
+                href={generatedLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open
+              </a>
+            </div>
+          )}
         </div>
       </div>
 

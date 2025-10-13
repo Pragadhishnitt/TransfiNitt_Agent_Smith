@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  password_hash String
+  role          String
+  created_at    DateTime    @default(now())
+  templates     Template[]
+  sessions      Session[]   @relation("UserSessions")
+  respondent    Respondent?
+}
+
+model Template {
+  id                String   @id @default(uuid())
+  researcher_id     String
+  title             String
+  topic             String?
+  starter_questions Json
+  created_at        DateTime @default(now())
+
+  researcher User      @relation(fields: [researcher_id], references: [id])
+  sessions   Session[]
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  template_id      String
+  respondent_id    String
+  status           String
+  transcript       Json?
+  summary          String?
+  sentiment_score  Decimal?  @db.Decimal(3, 2)
+  key_themes       Json?
+  started_at       DateTime?
+  completed_at     DateTime?
+  duration_seconds Int?
+
+  template   Template    @relation(fields: [template_id], references: [id])
+  respondent User        @relation("UserSessions", fields: [respondent_id], references: [id])
+  incentives Incentive[]
+}
+
+model Respondent {
+  id                  String   @id @default(uuid())
+  user_id             String   @unique
+  name                String
+  demographics        Json?
+  participation_count Int      @default(0)
+  total_incentives    Decimal? @default(0)
+  avg_sentiment       Decimal? @db.Decimal(3, 2)
+  behavior_tags       Json?
+
+  user       User        @relation(fields: [user_id], references: [id])
+  incentives Incentive[]
+}
+
+model Incentive {
+  id            String    @id @default(uuid())
+  respondent_id String
+  session_id    String
+  amount        Decimal
+  status        String
+  paid_at       DateTime?
+
+  respondent Respondent @relation(fields: [respondent_id], references: [id])
+  session    Session    @relation(fields: [session_id], references: [id])
+}

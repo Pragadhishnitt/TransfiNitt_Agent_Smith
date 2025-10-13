@@ -20,29 +20,37 @@ const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
 // Middleware
 app.use(requestLogger);
 app.use(cors({
-  origin: ['http://localhost:5174', 'http://localhost:5173'],
-  credentials: true,  
-}
-));
+  origin: [
+    'http://localhost:5174', 
+    'http://localhost:5173',
+    'http://localhost:3000',  // Add this
+    'http://localhost:3001'   // Add this
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 // ============================================
 // EMAIL CONFIGURATION
 // ============================================
-
-// Create email transporter with Gmail
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.EMAIL_PORT || '587'),
+  secure: false, // true for 465, false for other ports (587 uses STARTTLS)
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD
+  },
+  tls: {
+    // Don't fail on invalid certs (useful for development)
+    rejectUnauthorized: false
   }
 });
 
 // Verify transporter configuration
 transporter.verify((error, success) => {
   if (error) {
-    console.error('Email transporter verification failed:', error);
+    console.error('❌ Email transporter verification failed:', error);
   } else {
     console.log('✅ Email service ready');
   }

@@ -17,10 +17,10 @@ const redact = (obj) => {
   }
 };
 
-module.exports = function requestLogger(req, res, next) {
+export default function requestLogger(req, res, next) {
   const start = Date.now();
   const { method, url } = req;
-
+  
   // on finish, log status and time
   res.on('finish', () => {
     const duration = Date.now() - start;
@@ -30,9 +30,8 @@ module.exports = function requestLogger(req, res, next) {
       headers: { authorization: req.headers.authorization },
       body: req.body
     };
-
     console.log(`[${new Date().toISOString()}] ${method} ${url} ${res.statusCode} - ${duration}ms`, redact(safeReq));
   });
-
+  
   next();
-};
+}

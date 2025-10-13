@@ -28,4 +28,5 @@ build/
 *.sqlite
 
 #Prisma
-backend/generated/
+backend/generated/.env
+.env

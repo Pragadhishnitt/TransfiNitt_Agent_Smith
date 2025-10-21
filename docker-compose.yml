@@ -1,6 +1,7 @@
+
 services:
   # PostgreSQL Database
-  postgres:
+  db:
     image: postgres:15-alpine
     container_name: transfinitt_postgres
     environment:
@@ -8,7 +9,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+      - "5555:5555"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,13 +20,14 @@ services:
       retries: 5
     networks:
       - app_network
+    restart: unless-stopped
 
   # Redis for AI Interviewer
   redis:
     image: redis:7-alpine
     container_name: transfinitt_redis
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -34,48 +37,67 @@ services:
       retries: 5
     networks:
       - app_network
+    restart: unless-stopped
 
-  # Backend Service (Node.js) - Host Network for Email
+  # Backend Service (Node.js)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transfinitt_backend
     environment:
+      # PostgreSQL connection (NOT Supabase)
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      AGENT_URL: ${AGENT_URL}
-      PORT: ${BACKEND_PORT}
+      AGENT_URL: http://ai_interviewer:8001
+      PORT: ${BACKEND_PORT:-8000}
+      NODE_ENV: ${NODE_ENV:-development}
+      # Email configuration (optional)
       EMAIL_USER: ${EMAIL_USER}
       EMAIL_APP_PASSWORD: ${EMAIL_APP_PASSWORD}
-      NODE_ENV: ${NODE_ENV}
-      EMAIL_HOST: ${EMAIL_HOST}
-      EMAIL_PORT: ${EMAIL_PORT}
-    network_mode: host
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app_network
     restart: unless-stopped
+    command: sh -c "npx prisma migrate deploy && npx prisma generate && npm start"
 
-  # AI Interviewer Service (FastAPI Python) - Host Network
+  # AI Interviewer Service (FastAPI Python)
   ai_interviewer:
     build:
       context: ./ai_interviewer
       dockerfile: Dockerfile
     container_name: transfinitt_ai_interviewer
     environment:
-      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY}
+      # AI API Keys
       GROQ_API_KEY: ${GROQ_API_KEY}
-      DATABASE_URL: ${SUPABASE_DATABASE_URL}
-      SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
-      REDIS_DB: ${REDIS_DB}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2}
-      LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT}
-      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY}
-      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT}
-    network_mode: host
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY}
+      # Redis connection (NOT Supabase Redis)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # Backend connection
+      BACKEND_URL: http://backend:8000
+      # LangChain (optional)
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-}
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - app_network
     restart: unless-stopped
 
   # Researcher Dashboard (Frontend)
@@ -84,6 +106,8 @@ services:
       context: ./researcher-dashboard
       dockerfile: Dockerfile
     container_name: transfinitt_researcher_dashboard
+    environment:
+      REACT_APP_BACKEND_URL: http://localhost:${BACKEND_PORT:-8000}
     ports:
       - "3000:8090"
     depends_on:
@@ -91,8 +115,6 @@ services:
     networks:
       - app_network
     restart: unless-stopped
-    environment:
-      BACKEND_URL: ${BACKEND_URL}
 
   # Respondent Interview (Frontend)
   respondent_interview:
@@ -100,6 +122,9 @@ services:
       context: ./respondent-interview
       dockerfile: Dockerfile
     container_name: transfinitt_respondent_interview
+    environment:
+      REACT_APP_BACKEND_URL: http://localhost:${BACKEND_PORT:-8000}
+      REACT_APP_AI_AGENT_URL: http://localhost:8001
     ports:
       - "3001:8090"
     depends_on:
@@ -108,8 +133,6 @@ services:
     networks:
       - app_network
     restart: unless-stopped
-    environment:
-      BACKEND_URL: ${BACKEND_URL}
 
 networks:
   app_network:

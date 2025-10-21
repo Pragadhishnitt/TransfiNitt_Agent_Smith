@@ -1,59 +1,100 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional, Dict
-from datetime import datetime
 from enum import Enum
+from datetime import datetime
 
-class SentimentType(str, Enum):
-    POSITIVE = "positive"
-    NEGATIVE = "negative"
-    NEUTRAL = "neutral"
+# ========================================================================
+# ENUMS
+# ========================================================================
 
 class ResponseQuality(str, Enum):
+    EXCELLENT = "excellent"
+    GOOD = "good"
     SHALLOW = "shallow"
     VAGUE = "vague"
-    GOOD = "good"
 
-class InterviewState(BaseModel):
-    session_id: str
-    respondent_id: str  # Added
-    template_id: str
-    research_topic: str
-    conversation_history: List[Dict[str, str]] = []
-    current_question_count: int = 0
-    max_questions: int = 15
-    is_complete: bool = False
-    probe_count: int = 0
-    should_terminate_early: bool = False  # NEW
-    termination_reason: Optional[str] = None  # NEW
+class Sentiment(str, Enum):
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
 
-class UserResponse(BaseModel):
-    session_id: str
-    message: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+# ========================================================================
+# ANALYZED RESPONSE MODEL
+# ========================================================================
 
 class AnalyzedResponse(BaseModel):
-    response_text: str
-    sentiment: SentimentType
+    """Fast analysis result from analyzer agent"""
+    session_id: str
+    respondent_id: str
+    user_response: str
+    
     quality: ResponseQuality
+    sentiment: Sentiment
     word_count: int
     key_insights: List[str] = []
+    
+    timestamp: datetime = None
+    needs_probe: bool = True
+    def __init__(self, **data):
+        if 'timestamp' not in data or data['timestamp'] is None:
+            data['timestamp'] = datetime.now()
+        super().__init__(**data)
 
-class InterviewTemplate(BaseModel):
+# ========================================================================
+# DEEP ANALYSIS (from analyzer agent)
+# ========================================================================
+
+class DeepAnalysis(BaseModel):
+    """Deep analysis result - only for good responses"""
+    key_insights: List[str]
+    emotional_tone: str
+    needs_follow_up: bool
+    suggested_follow_up_topic: str
+
+# ========================================================================
+# INTERVIEW STATE
+# ========================================================================
+
+class InterviewState(BaseModel):
+    """Complete interview session state"""
+    session_id: str
+    respondent_id: str
     template_id: str
     research_topic: str
-    starter_questions: List[str]
-    probe_triggers: List[str] = []
+    
+    conversation_history: List[Dict[str, str]] = []
+    
+    current_question_count: int = 0
     max_questions: int = 15
-    user_type: Optional[str] = None
+    
+    is_complete: bool = False
+    should_terminate_early: bool = False
+    termination_reason: Optional[str] = None
+
+# ========================================================================
+# SUMMARY MODEL
+# ========================================================================
 
 class InterviewSummary(BaseModel):
+    """Final interview summary"""
     session_id: str
-    respondent_id: str  # Added
     template_id: str
-    research_topic: str
-    total_questions: int
-    key_insights: List[str]
-    sentiment_distribution: Dict[str, int]
-    conversation_summary: str
-    metadata: Optional[Dict] = None  # NEW - stores early_termination, termination_reason, etc.
-    created_at: datetime = Field(default_factory=datetime.now)
+    
+    summary: str
+    key_themes: List[str]
+    
+    average_sentiment_score: float
+    total_insights_count: int
+    
+    questions_asked: int
+    total_exchanges: int
+    
+    terminated_early: bool = False
+    termination_reason: Optional[str] = None
+    
+    generated_at: datetime = None
+    
+    def __init__(self, **data):
+        if 'generated_at' not in data or data['generated_at'] is None:
+            data['generated_at'] = datetime.now()
+        super().__init__(**data)

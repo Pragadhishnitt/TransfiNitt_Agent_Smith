@@ -1,117 +1,187 @@
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from models.schemas import InterviewSummary, InterviewState
-from typing import List, Dict, Optional
-from collections import Counter
+"""
+Summary Agent - Generates final interview summaries
+"""
+
+from models.schemas import InterviewState, AnalyzedResponse, InterviewSummary
+from typing import List
+from groq import Groq
 import config
+import json
 
 class SummaryAgent:
-    """Fast summary generation using Groq 70B"""
+    """Generates comprehensive interview summaries"""
     
     def __init__(self):
-        # Use Groq 70B for quality summaries (still fast!)
-        self.llm = ChatGroq(
-            model=config.SUMMARY_MODEL,
-            temperature=config.SUMMARY_TEMPERATURE,
-            api_key=config.GROQ_API_KEY,
-            max_tokens=config.SUMMARY_MAX_TOKENS,
-            timeout=config.LLM_TIMEOUT * 2  # Slightly longer for summaries
-        )
+        self.groq_client = Groq(api_key=config.GROQ_API_KEY)
     
     async def generate_summary(
         self,
-        interview_state: InterviewState,
-        all_analyzed_responses: List[Dict],
+        state: InterviewState,
+        analyzed_responses: List[AnalyzedResponse],
         early_termination: bool = False,
-        termination_reason: Optional[str] = None
+        termination_reason: str = None
     ) -> InterviewSummary:
-        """Fast summary generation"""
+        """
+        Generate final summary including:
+        1. Overall summary of conversation
+        2. Key themes identified
+        3. Average sentiment
+        4. Total insights collected
+        """
         
-        # Extract sentiment distribution
-        sentiments = [r.get("sentiment", "neutral") if isinstance(r, dict) else r.sentiment.value 
-                     for r in all_analyzed_responses]
-        sentiment_distribution = dict(Counter(sentiments))
-        
-        # Extract insights
+        # Collect all insights
         all_insights = []
-        for r in all_analyzed_responses:
-            insights = r.get("key_insights", []) if isinstance(r, dict) else r.key_insights
-            if insights:
-                all_insights.extend(insights)
+        sentiment_scores = []
         
-        unique_insights = list(set(all_insights))[:10]
+        for response in analyzed_responses:
+            all_insights.extend(response.key_insights)
+            
+            # Convert sentiment to numeric score
+            if response.sentiment.value == "positive":
+                sentiment_scores.append(0.8)
+            elif response.sentiment.value == "negative":
+                sentiment_scores.append(0.2)
+            else:
+                sentiment_scores.append(0.5)
         
-        # Generate summary with minimal prompt
-        summary_text = await self._generate_narrative_summary(
-            interview_state.research_topic,
-            interview_state.conversation_history,
-            unique_insights,
+        # Calculate average sentiment
+        avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.5
+        
+        # Extract user responses for summary
+        user_responses = [
+            msg["content"] 
+            for msg in state.conversation_history 
+            if msg["role"] == "user"
+        ]
+        
+        # Generate summary using Groq
+        summary_text = await self._generate_summary_text(
+            user_responses,
+            all_insights,
+            state.research_topic,
             early_termination,
             termination_reason
         )
         
-        summary_metadata = {
-            "early_termination": early_termination,
-            "termination_reason": termination_reason,
-            "questions_asked": interview_state.current_question_count,
-            "max_questions": interview_state.max_questions,
-            "completion_percentage": (interview_state.current_question_count / interview_state.max_questions) * 100
-        }
+        # Extract key themes
+        key_themes = await self._extract_key_themes(all_insights, user_responses)
         
         return InterviewSummary(
-            session_id=interview_state.session_id,
-            respondent_id=interview_state.respondent_id,
-            template_id=interview_state.template_id,
-            research_topic=interview_state.research_topic,
-            total_questions=interview_state.current_question_count,
-            key_insights=unique_insights,
-            sentiment_distribution=sentiment_distribution,
-            conversation_summary=summary_text,
-            metadata=summary_metadata
+            session_id=state.session_id,
+            template_id=state.template_id,
+            summary=summary_text,
+            key_themes=key_themes,
+            average_sentiment_score=round(avg_sentiment, 2),
+            total_insights_count=len(all_insights),
+            questions_asked=state.current_question_count,
+            total_exchanges=len(state.conversation_history),
+            terminated_early=early_termination,
+            termination_reason=termination_reason
         )
     
-    async def _generate_narrative_summary(
+    async def _generate_summary_text(
         self,
+        user_responses: List[str],
+        insights: List[str],
         research_topic: str,
-        conversation_history: List[Dict[str, str]],
-        key_insights: List[str],
         early_termination: bool,
-        termination_reason: Optional[str]
+        termination_reason: str
     ) -> str:
-        """Fast summary generation with minimal prompt"""
+        """Generate summary text using Groq"""
         
-        # Truncate conversation for speed (last 10 exchanges only)
-        recent_history = conversation_history[-20:]  # Last 10 Q&A pairs
-        conversation_text = "\n".join([
-            f"{'Q' if msg['role']=='assistant' else 'A'}: {msg['content']}"
-            for msg in recent_history
-        ])
+        responses_text = "\n".join(user_responses)
+        insights_text = "\n".join([f"- {insight}" for insight in insights[:20]])  # Top 20
         
         if early_termination:
-            system_prompt = f"""Interview about {research_topic} ended early ({termination_reason}).
+            prefix = f"⚠️ Interview terminated early: {termination_reason}\n\n"
+            prompt = f"""Generate a brief summary (2-3 sentences) of this INCOMPLETE interview.
 
-Write 2 paragraphs:
-1. What insights were gathered
-2. Why they stopped and recommendations"""
+Research Topic: {research_topic}
+
+User Responses:
+{responses_text}
+
+Key Insights:
+{insights_text}
+
+Note: This interview was terminated early. Focus on what was discussed before termination.
+Summarize the main points covered:"""
         else:
-            system_prompt = f"""Completed interview about {research_topic}.
+            prefix = ""
+            prompt = f"""Generate a comprehensive summary (3-4 sentences) of this interview.
 
-Write 3 paragraphs:
-1. Key findings
-2. Participant perspective
-3. Recommendations"""
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("user", f"{conversation_text}\n\nInsights: {', '.join(key_insights) if key_insights else 'Limited'}\n\nSummary:")
-        ])
+Research Topic: {research_topic}
+
+User Responses:
+{responses_text}
+
+Key Insights:
+{insights_text}
+
+Summarize the main findings, patterns, and user perspectives:"""
         
         try:
-            result = await (prompt | self.llm).ainvoke({})
-            return result.content.strip()
+            response = self.groq_client.chat.completions.create(
+                model=config.GROQ_QUALITY_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.0
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            return prefix + summary
+        
         except Exception as e:
-            # Fast fallback
-            return f"Interview {'terminated early' if early_termination else 'completed'} with {len(key_insights)} key insights gathered."
+            print(f"⚠️ Summary generation error: {e}")
+            if early_termination:
+                return f"{prefix}Interview was terminated before completion. Limited insights were gathered about {research_topic}."
+            return f"Interview completed successfully. User shared their perspectives on {research_topic}."
+    
+    async def _extract_key_themes(
+        self,
+        insights: List[str],
+        user_responses: List[str]
+    ) -> List[str]:
+        """Extract key themes using Groq"""
+        
+        if not insights and not user_responses:
+            return ["general feedback", "user experience"]
+        
+        combined_text = "\n".join(insights) + "\n" + "\n".join(user_responses)
+        
+        prompt = f"""Extract 3-5 key themes from this interview data.
+
+Interview Data:
+{combined_text[:2000]}  
+
+Return ONLY a JSON array of theme strings:
+["theme1", "theme2", "theme3"]
+
+Themes should be:
+- Concise (2-4 words)
+- Specific to what was discussed
+- Actionable for researchers"""
+        
+        try:
+            response = self.groq_client.chat.completions.create(
+                model=config.GROQ_QUALITY_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100,
+                temperature=0.0
+            )
+            
+            themes_text = response.choices[0].message.content.strip()
+            
+            # Parse JSON
+            themes = json.loads(themes_text)
+            return themes[:5]  # Max 5 themes
+        
+        except Exception as e:
+            print(f"⚠️ Theme extraction error: {e}")
+            # Fallback: Extract from insights
+            if insights:
+                return [insight.split(":")[0] for insight in insights[:5]]
+            return ["user preferences", "experience feedback", "usage patterns"]
 
 # Singleton instance
 summary_agent = SummaryAgent()

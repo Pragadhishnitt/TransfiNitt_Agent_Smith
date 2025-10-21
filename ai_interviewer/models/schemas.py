@@ -34,7 +34,7 @@ class AnalyzedResponse(BaseModel):
     key_insights: List[str] = []
     
     timestamp: datetime = None
-    needs_probe: bool = True
+    
     def __init__(self, **data):
         if 'timestamp' not in data or data['timestamp'] is None:
             data['timestamp'] = datetime.now()
@@ -45,11 +45,21 @@ class AnalyzedResponse(BaseModel):
 # ========================================================================
 
 class DeepAnalysis(BaseModel):
-    """Deep analysis result - only for good responses"""
+    """Deep analysis result - only for relevant responses"""
     key_insights: List[str]
     emotional_tone: str
     needs_follow_up: bool
     suggested_follow_up_topic: str
+
+# ========================================================================
+# PROBE DECISION MODEL (NEW)
+# ========================================================================
+
+class ProbeDecision(BaseModel):
+    """Result from intelligent probe decision agent"""
+    should_probe: bool
+    reason: str
+    probe_type: str  # "irrelevant" or "none"
 
 # ========================================================================
 # INTERVIEW STATE

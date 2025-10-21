@@ -5,6 +5,7 @@ from agents.analyzer import analyzer, DeepAnalysis
 from agents.probe import probe_agent
 from agents.interviewer import interviewer_agent
 from agents.summary import summary_agent
+from agents.probe_decision import probe_decision_agent  # NEW: Smart probe decision
 from storage.db_client import db_client
 from utils.early_termination import early_termination_detector
 
@@ -36,6 +37,9 @@ class InterviewGraphState(TypedDict):
     
     waiting_for_clarification: bool
     accumulated_insights: List[str]
+    
+    # NEW: Probe decision tracking
+    probe_decision: Optional[Dict]
     
     summary: Optional[Dict]
 
@@ -82,7 +86,8 @@ async def analyze_response_node(state: InterviewGraphState) -> Dict:
             "termination_reason": exit_reason,
             "is_complete": True,
             "total_exchanges": current_exchanges + 1,
-            "waiting_for_clarification": False
+            "waiting_for_clarification": False,
+            "probe_decision": None
         }
     
     print(f"  ✅ Continuing interview")
@@ -96,29 +101,69 @@ async def analyze_response_node(state: InterviewGraphState) -> Dict:
         "waiting_for_clarification": False
     }
 
+async def probe_decision_node(state: InterviewGraphState) -> Dict:
+    """
+    NEW Step 2: Intelligent probe decision
+    Uses AI to determine if response is TRULY irrelevant/off-topic
+    """
+    if state.get("should_terminate_early"):
+        print(f"  ⏭️ Skipping probe decision - terminating")
+        return {"probe_decision": {"should_probe": False, "reason": "terminating", "probe_type": "none"}}
+    
+    analyzed = state["analyzed_response"]
+    
+    # Get the question that was asked
+    last_question = None
+    for msg in reversed(state["conversation_history"][:-1]):  # Skip the user's latest response
+        if msg["role"] == "assistant":
+            last_question = msg["content"]
+            break
+    
+    if not last_question:
+        last_question = f"about {state['research_topic']}"
+    
+    print(f"🤔 INTELLIGENT PROBE DECISION...")
+    print(f"   Question: {last_question[:60]}...")
+    print(f"   Response: {state['user_response'][:60]}...")
+    
+    # Use intelligent probe decision agent
+    probe_decision = await probe_decision_agent.should_probe(
+        question_asked=last_question,
+        user_response=state["user_response"],
+        research_topic=state["research_topic"],
+        response_quality=analyzed.quality.value
+    )
+    
+    print(f"   🎯 Decision: {'PROBE' if probe_decision['should_probe'] else 'NO PROBE'}")
+    print(f"   📝 Reason: {probe_decision['reason']}")
+    
+    return {
+        "probe_decision": probe_decision
+    }
+
 async def deep_analysis_node(state: InterviewGraphState) -> Dict:
-    """Step 2: Deep analysis - ONLY for good quality responses."""
+    """Step 3: Deep analysis - for relevant, good quality responses."""
     if state.get("should_terminate_early"):
         print(f"  ⏭️ Skipping deep analysis - terminating")
         return {"deep_analysis": None}
     
-    analyzed = state["analyzed_response"]
+    probe_decision = state.get("probe_decision", {})
     
-    # Skip deep analysis for shallow/vague - we'll probe them
-    if analyzed.quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]:
-        print(f"  ⚡ Skipping deep analysis - {analyzed.quality.value} response will be probed")
+    # Skip deep analysis if we're going to probe
+    if probe_decision.get("should_probe"):
+        print(f"  ⚡ Skipping deep analysis - response is irrelevant, will probe")
         
         minimal_deep = DeepAnalysis(
             key_insights=[],
             emotional_tone="neutral",
-            needs_follow_up=True,
-            suggested_follow_up_topic="more details"
+            needs_follow_up=False,
+            suggested_follow_up_topic=""
         )
         
         return {"deep_analysis": minimal_deep}
     
-    # Deep analysis for GOOD responses
-    print(f"🧠 Deep analysis for good response...")
+    # Deep analysis for RELEVANT responses (even if short)
+    print(f"🧠 Deep analysis for relevant response...")
     
     recent_context = state["conversation_history"][-6:]
     context_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_context])
@@ -130,10 +175,12 @@ async def deep_analysis_node(state: InterviewGraphState) -> Dict:
     
     print(f"  💡 Insights: {len(deep_analysis_result.key_insights)}")
     
+    analyzed = state["analyzed_response"]
+    
     # Add insights
     analyzed.key_insights.extend(deep_analysis_result.key_insights)
     
-    # Get accumulated insights from probing
+    # Get accumulated insights from any previous probing
     accumulated = state.get("accumulated_insights", [])
     analyzed.key_insights.extend(accumulated)
     
@@ -151,8 +198,8 @@ async def deep_analysis_node(state: InterviewGraphState) -> Dict:
     }
 
 async def internal_probe_node(state: InterviewGraphState) -> Dict:
-    """Step 3a: INTERNAL PROBE with deviation detection and redirection."""
-    print(f"⚡ INTERNAL PROBE (Count: {state['probe_count']})")
+    """Step 4a: PROBE - only for truly irrelevant responses."""
+    print(f"⚡ PROBING IRRELEVANT RESPONSE (Count: {state['probe_count']})")
     
     # Find the original question
     original_question = None
@@ -167,13 +214,11 @@ async def internal_probe_node(state: InterviewGraphState) -> Dict:
     
     print(f"   🎯 Original question: {original_question[:50]}...")
     
-    # Generate probe with deviation detection
-    probe_question = await probe_agent.generate_probe_question(
+    # Generate redirect probe (since response was irrelevant)
+    probe_question = await probe_agent.generate_redirect_probe(
         original_question=original_question,
         user_response=state["user_response"],
-        topic=state["deep_analysis"].suggested_follow_up_topic if state.get("deep_analysis") else "details",
-        research_topic=state["research_topic"],
-        conversation_history=state["conversation_history"]
+        research_topic=state["research_topic"]
     )
     
     print(f"   ✅ Probe: {probe_question[:80]}...")
@@ -182,7 +227,7 @@ async def internal_probe_node(state: InterviewGraphState) -> Dict:
     new_history = state["conversation_history"].copy()
     new_history.append({"role": "assistant", "content": probe_question})
     
-    # Extract insights from shallow response
+    # Extract any minimal insights from irrelevant response (usually none)
     accumulated = state.get("accumulated_insights", []).copy()
     if state["analyzed_response"].key_insights:
         accumulated.extend(state["analyzed_response"].key_insights)
@@ -198,7 +243,7 @@ async def internal_probe_node(state: InterviewGraphState) -> Dict:
     }
 
 async def generate_question_node(state: InterviewGraphState) -> Dict:
-    """Step 3b: Generate next main question."""
+    """Step 4b: Generate next main question."""
     next_q_number = state["question_count"] + 1
     print(f"📝 Generating Question {next_q_number}/{state['max_questions']}...")
     
@@ -232,11 +277,12 @@ async def generate_question_node(state: InterviewGraphState) -> Dict:
         "is_probe": False,
         "total_exchanges": state["total_exchanges"] + 1,
         "waiting_for_clarification": False,
-        "accumulated_insights": []
+        "accumulated_insights": [],
+        "probe_decision": None
     }
 
 async def generate_summary_node(state: InterviewGraphState) -> Dict:
-    """Step 4: Generate final summary."""
+    """Step 5: Generate final summary."""
     is_early = state.get("should_terminate_early", False)
     
     print(f"📊 Generating {'EARLY TERMINATION' if is_early else 'FINAL'} summary...")
@@ -276,37 +322,39 @@ async def generate_summary_node(state: InterviewGraphState) -> Dict:
     }
 
 # ========================================================================
-# CONDITIONAL EDGES
+# CONDITIONAL EDGES - UPDATED WITH INTELLIGENT PROBE DECISION
 # ========================================================================
 
 def should_probe(state: InterviewGraphState) -> str:
-    """Decides whether to probe internally or move to next question."""
+    """
+    NEW: Decides based on INTELLIGENT probe decision agent.
+    Only probes if response is TRULY irrelevant/off-topic.
+    """
+    # Priority 1: Early termination
     if state.get("should_terminate_early"):
         print(f"\n  🛑 TERMINATE → SUMMARY")
         return "terminate"
     
-    analyzed = state["analyzed_response"]
-    deep = state.get("deep_analysis")
+    probe_decision = state.get("probe_decision", {})
     probe_count = state["probe_count"]
     
-    # Max 1 probe reached
+    # Priority 2: Max 1 probe reached
     if probe_count >= 1:
         print(f"\n  ⏭️ MAX PROBE (1) REACHED → FORCE NEXT QUESTION")
         return "next_question"
     
-    # Check if response needs probing
-    quality_needs_probe = analyzed.quality in [ResponseQuality.SHALLOW, ResponseQuality.VAGUE]
-    deep_needs_probe = deep and deep.needs_follow_up
+    # Priority 3: Check intelligent probe decision
+    should_probe_now = probe_decision.get("should_probe", False)
+    reason = probe_decision.get("reason", "No reason")
     
-    should_probe_decision = quality_needs_probe or deep_needs_probe
+    print(f"\n  🎯 Probe Decision: {should_probe_now}")
+    print(f"     Reason: {reason}")
     
-    print(f"\n  🎯 Quality: {analyzed.quality.value} | Needs probe: {should_probe_decision} | Probes: {probe_count}/1")
-    
-    if should_probe_decision and probe_count == 0:
-        print(f"  ➡️ INTERNAL PROBE ⚡")
+    if should_probe_now and probe_count == 0:
+        print(f"  ➡️ PROBE (Response is irrelevant/off-topic) ⚡")
         return "probe"
     else:
-        print(f"  ➡️ GOOD RESPONSE or MAX PROBES → NEXT QUESTION 📝")
+        print(f"  ➡️ NO PROBE NEEDED → NEXT QUESTION 📝")
         return "next_question"
 
 def should_continue(state: InterviewGraphState) -> str:
@@ -332,12 +380,13 @@ def should_continue(state: InterviewGraphState) -> str:
 # ========================================================================
 
 def build_interview_workflow():
-    """Builds the interview workflow with MAX 1 PROBE and deviation detection."""
+    """Builds the interview workflow with INTELLIGENT probe decision."""
     
     workflow = StateGraph(InterviewGraphState)
     
     # Add nodes
     workflow.add_node("analyze_response", analyze_response_node)
+    workflow.add_node("probe_decision", probe_decision_node)  # NEW: Smart decision
     workflow.add_node("deep_analysis", deep_analysis_node)
     workflow.add_node("internal_probe", internal_probe_node)
     workflow.add_node("generate_question", generate_question_node)
@@ -346,8 +395,9 @@ def build_interview_workflow():
     # Set entry point
     workflow.set_entry_point("analyze_response")
     
-    # Flow
-    workflow.add_edge("analyze_response", "deep_analysis")
+    # Flow: analyze → probe_decision → deep_analysis → [probe OR next_question]
+    workflow.add_edge("analyze_response", "probe_decision")
+    workflow.add_edge("probe_decision", "deep_analysis")
     
     workflow.add_conditional_edges(
         "deep_analysis",
@@ -379,8 +429,8 @@ def build_interview_workflow():
 # ========================================================================
 interview_workflow = build_interview_workflow()
 
-print("✅ LangGraph workflow compiled!")
-print("   📊 MAX PROBES: 1 per question")
-print("   🔄 DEVIATION DETECTION: Enabled")
-print("   ➡️ Deviation behavior: 'That's great! Now back to [original question]'")
-print("   Flow: analyze → deep_analysis → [terminate OR probe OR next_question]")
+print("✅ LangGraph workflow compiled with INTELLIGENT PROBE DECISION!")
+print("   🤖 AI Agent decides: Probe ONLY if response is IRRELEVANT/OFF-TOPIC")
+print("   ✅ Short answers OK if on-topic")
+print("   🚨 Probes only for: chess → dance, product → weather, etc.")
+print("   Flow: analyze → probe_decision → deep_analysis → [probe OR next_question]")

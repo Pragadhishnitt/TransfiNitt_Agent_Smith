@@ -35,9 +35,9 @@ groq_client = Groq(api_key=config.GROQ_API_KEY)
 # FASTAPI APP INITIALIZATION
 # ========================================================================
 app = FastAPI(
-    title="AI Interview Agent Service with LangGraph",
-    description="Interview agent using LangGraph workflow",
-    version="2.0.0"
+    title="AI Interview Agent with Intelligent Probe Decision",
+    description="Interview agent that ONLY probes when responses are truly irrelevant",
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -122,37 +122,6 @@ def save_state_to_redis(session_id: str, state: Dict):
         ex=86400  # 24 hour expiry
     )
 
-def analyze_sentiment(text: str) -> str:
-    """Simple sentiment analysis"""
-    positive_words = ["good", "great", "excellent", "love", "enjoy", "amazing"]
-    negative_words = ["bad", "terrible", "hate", "awful", "disappointed", "frustrated"]
-    
-    text_lower = text.lower()
-    positive_count = sum(1 for word in positive_words if word in text_lower)
-    negative_count = sum(1 for word in negative_words if word in text_lower)
-    
-    if positive_count > negative_count:
-        return "positive"
-    elif negative_count > positive_count:
-        return "negative"
-    return "neutral"
-
-def score_sentiment(text: str) -> float:
-    """Numeric sentiment score between 0.0 and 1.0"""
-    positive_words = ["good", "great", "excellent", "love", "enjoy", "amazing"]
-    negative_words = ["bad", "terrible", "hate", "awful", "disappointed", "frustrated"]
-
-    text_lower = text.lower()
-    pos = sum(1 for w in positive_words if w in text_lower)
-    neg = sum(1 for w in negative_words if w in text_lower)
-
-    total = pos + neg
-    if total > 0:
-        score = 0.1 + 0.8 * (pos / total)
-        return round(max(0.0, min(1.0, score)), 2)
-
-    return 0.5
-
 # ========================================================================
 # ENDPOINTS
 # ========================================================================
@@ -192,7 +161,7 @@ async def start_interview(request: StartRequest):
         # Initialize LangGraph state
         initial_state: InterviewGraphState = {
             "session_id": session_id,
-            "respondent_id": session_id,  # Using session_id as respondent_id for now
+            "respondent_id": session_id,
             "template_id": template_id,
             "research_topic": research_topic,
             "conversation_history": [],
@@ -210,6 +179,7 @@ async def start_interview(request: StartRequest):
             "max_questions": 15,
             "waiting_for_clarification": False,
             "accumulated_insights": [],
+            "probe_decision": None,
             "summary": None
         }
         
@@ -230,7 +200,7 @@ async def start_interview(request: StartRequest):
         # Initialize in database
         await db_client.initialize_session(session_id, template_id, research_topic)
         
-        print(f"✅ Interview initialized with LangGraph")
+        print(f"✅ Interview initialized with INTELLIGENT PROBE DECISION")
         print(f"   First question: {first_question[:50]}...")
         print(f"{'='*60}\n")
         
@@ -247,8 +217,8 @@ async def start_interview(request: StartRequest):
 @app.post("/agent/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Process user message using LangGraph workflow.
-    This is where the magic happens!
+    Process user message using LangGraph workflow with INTELLIGENT probe decision.
+    Only probes if response is TRULY irrelevant/off-topic.
     """
     try:
         session_id = request.session_id
@@ -268,9 +238,9 @@ async def chat(request: ChatRequest):
         state["user_response"] = user_message
         
         # ========================================================================
-        # 🎯 RUN LANGGRAPH WORKFLOW
+        # 🎯 RUN LANGGRAPH WORKFLOW WITH INTELLIGENT PROBE DECISION
         # ========================================================================
-        print(f"🔄 Running LangGraph workflow...")
+        print(f"🔄 Running LangGraph workflow with AI probe decision...")
         
         # Invoke the workflow
         result = await interview_workflow.ainvoke(state)
@@ -377,7 +347,7 @@ async def end_interview(request: EndRequest):
         if terminated_early:
             summary_text = f"[Interview terminated early: {termination_reason}] {summary_text}"
         
-        print(f" ✅ Interview ended")
+        print(f"✅ Interview ended")
         print(f"   Questions: {state['question_count']}/{state['max_questions']}")
         print(f"   Early termination: {terminated_early}")
         print(f"{'='*60}\n")
@@ -410,10 +380,11 @@ async def end_interview(request: EndRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting FastAPI with LangGraph Integration")
-    print("📊 Workflow: analyze → deep_analysis → [probe OR next_question]")
-    print("⚡ Max probes: 1 per question")
-    print("🔄 Deviation detection: Enabled")
+    print("🚀 Starting FastAPI with INTELLIGENT PROBE DECISION")
+    print("🤖 AI Agent decides: Probe ONLY if response is IRRELEVANT/OFF-TOPIC")
+    print("✅ Short answers OK if on-topic (e.g., 'yes', 'good', 'daily')")
+    print("🚨 Probes only for truly irrelevant responses (chess → dance, product → weather)")
+    print("📊 Flow: analyze → probe_decision → deep_analysis → [probe OR next_question]")
     uvicorn.run(
         app,
         host="0.0.0.0",

@@ -1,101 +1,59 @@
 """
-Probe Agent - Generates probe questions and detects topic deviation
+Probe Agent - Generates redirect probes for irrelevant responses
+SIMPLIFIED: Only handles redirects, no deviation detection (handled by probe_decision agent)
 """
 
-from typing import List, Dict, Optional
+from typing import Dict
 from groq import Groq
 import config
 
 class ProbeAgent:
-    """Generates intelligent probe questions with deviation detection"""
+    """Generates redirect probes for off-topic responses"""
     
     def __init__(self):
         self.groq_client = Groq(api_key=config.GROQ_API_KEY)
     
-    async def generate_probe_question(
-        self,
-        original_question: str,
-        user_response: str,
-        topic: str,
-        research_topic: str,
-        conversation_history: List[Dict]
-    ) -> str:
-        """
-        Generate a probe question that:
-        1. Detects if user deviated from topic
-        2. If deviated: acknowledges and redirects back
-        3. If vague: asks for specific examples
-        """
-        
-        # Detect deviation
-        deviation_detected = await self._detect_deviation(
-            original_question,
-            user_response,
-            research_topic
-        )
-        
-        if deviation_detected:
-            print(f"   🔄 DEVIATION DETECTED - Redirecting back to original question")
-            return await self._generate_redirect_probe(original_question, user_response)
-        else:
-            print(f"   ⚡ VAGUE RESPONSE - Asking for specifics")
-            return await self._generate_clarification_probe(original_question, user_response, topic)
-    
-    async def _detect_deviation(
+    async def generate_redirect_probe(
         self,
         original_question: str,
         user_response: str,
         research_topic: str
-    ) -> bool:
-        """Detect if user went off-topic"""
+    ) -> str:
+        """
+        Generate a friendly redirect back to the original question.
+        Called ONLY when response is confirmed irrelevant by probe_decision agent.
+        """
         
-        prompt = f"""You are analyzing if a user's response is ON TOPIC or OFF TOPIC.
+        prompt = f"""The user gave an IRRELEVANT/OFF-TOPIC response. Generate a FRIENDLY redirect.
 
 Research Topic: {research_topic}
 Question Asked: {original_question}
-User's Response: {user_response}
-
-Did the user answer the question about the topic, or did they talk about something completely different?
-
-Respond with ONLY: "ON_TOPIC" or "OFF_TOPIC"
-"""
-        
-        try:
-            response = self.groq_client.chat.completions.create(
-                model=config.GROQ_FAST_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=10,
-                temperature=0.1
-            )
-            
-            result = response.choices[0].message.content.strip().upper()
-            return "OFF_TOPIC" in result
-        
-        except Exception as e:
-            print(f"⚠️ Deviation detection error: {e}")
-            return False  # Assume on-topic if error
-    
-    async def _generate_redirect_probe(
-        self,
-        original_question: str,
-        user_response: str
-    ) -> str:
-        """Generate a question that redirects back to the original topic"""
-        
-        prompt = f"""The user went off-topic. Generate a FRIENDLY but FIRM redirect.
-
-Original Question: {original_question}
 User's Off-Topic Response: {user_response}
 
 Your task:
-1. Briefly acknowledge what they said (1 sentence)
+1. Briefly acknowledge what they said (1 short sentence)
 2. Gently redirect back to the original question
-3. Rephrase the original question with more specific guidance
+3. Make it conversational and warm
 
-Example:
-"That's interesting! But let's get back to what I asked about - [rephrase original question with specific examples]"
+Examples:
 
-Keep it warm but assertive. 1-2 sentences MAX.
+Q: "Tell me about your experience with our app"
+A: "I like pizza" 
+Redirect: "Ha, pizza is great! But I'd love to hear about your experience with our app - what's your overall impression?"
+
+Q: "What features do you use most?"
+A: "My cat is sleeping"
+Redirect: "Aww, cute! Now, back to the app - which features do you find yourself using most often?"
+
+Q: "How often do you use the product?"
+A: "I went dancing yesterday"
+Redirect: "That sounds fun! Let's get back to the product though - how often would you say you use it?"
+
+Keep it:
+- Warm and friendly (not scolding)
+- Brief (1-2 sentences MAX)
+- Natural and conversational
+- Firm but kind about returning to topic
 
 Generate your redirect:"""
         
@@ -111,48 +69,7 @@ Generate your redirect:"""
         
         except Exception as e:
             print(f"⚠️ Redirect probe error: {e}")
-            return f"That's great! Now let's get back to my original question: {original_question}"
-    
-    async def _generate_clarification_probe(
-        self,
-        original_question: str,
-        user_response: str,
-        topic: str
-    ) -> str:
-        """Generate a probe for vague/shallow responses"""
-        
-        prompt = f"""The user gave a VAGUE answer. Generate a probe that asks for SPECIFIC EXAMPLES.
-
-Original Question: {original_question}
-User's Vague Answer: {user_response}
-Topic to probe: {topic}
-
-Your task:
-1. Briefly acknowledge their answer
-2. Ask for a SPECIFIC EXAMPLE or concrete detail
-3. Use phrases like:
-   - "Can you walk me through a specific time when..."
-   - "Give me a concrete example of..."
-   - "Tell me about the last time you..."
-
-Be warm and encouraging. Show genuine curiosity.
-Keep it 1-2 sentences MAX.
-
-Generate your probe:"""
-        
-        try:
-            response = self.groq_client.chat.completions.create(
-                model=config.GROQ_FAST_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=100,
-                temperature=0.4
-            )
-            
-            return response.choices[0].message.content.strip()
-        
-        except Exception as e:
-            print(f"⚠️ Clarification probe error: {e}")
-            return "Could you give me a specific example of what you mean?"
+            return f"That's interesting! Let's get back to my question though: {original_question}"
 
 # Singleton instance
 probe_agent = ProbeAgent()

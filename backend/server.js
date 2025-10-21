@@ -21,10 +21,8 @@ const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
 app.use(requestLogger);
 app.use(cors({
   origin: [
-    'http://localhost:5174', 
-    'http://localhost:5173',
-    'http://localhost:3000',  // Add this
-    'http://localhost:3001'   // Add this
+    'http://localhost:3000',  
+    'http://localhost:3001'   
   ],
   credentials: true,
 }));
@@ -351,7 +349,7 @@ app.post('/api/templates', verifyToken, async (req, res) => {
 
     success(res, { 
       template,
-      interview_link: `http://localhost:5174/interview/generate-link-here`
+      interview_link: `http://localhost:3001/interview/generate-link-here`
     });
   } catch (err) {
     console.error(err);
@@ -732,7 +730,7 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
       }
     });
 
-    const interviewLink = `http://localhost:5174/interview/${session.id}`;
+    const interviewLink = `http://localhost:3001/interview/${session.id}`;
 
     // Send email if requested and email is provided
     let emailSent = false;

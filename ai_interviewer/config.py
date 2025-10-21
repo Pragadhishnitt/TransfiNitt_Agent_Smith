@@ -17,7 +17,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
 
 MAX_QUESTIONS = 15
-MAX_CONSECUTIVE_PROBES = 3  # Max probes per question (changed to 1)
+MAX_CONSECUTIVE_PROBES = 3  
 
 # ================================
 # Backend Service URL

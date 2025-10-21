@@ -107,7 +107,7 @@ class EarlyTerminationDetector:
         sentiment: str,
         conversation_history: List[Dict],
         consecutive_probes: int = 0,
-        max_probes: int = 1
+        max_probes: int = 3
     ) -> Tuple[bool, str]:
         """
         Comprehensive termination check.

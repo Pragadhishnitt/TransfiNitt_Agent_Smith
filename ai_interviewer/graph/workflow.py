@@ -5,7 +5,7 @@ from agents.analyzer import analyzer, DeepAnalysis
 from agents.probe import probe_agent
 from agents.interviewer import interviewer_agent
 from agents.summary import summary_agent
-from agents.probe_decision import probe_decision_agent  # NEW: Smart probe decision
+from agents.probe_decision import probe_decision_agent
 from storage.db_client import db_client
 from utils.early_termination import early_termination_detector
 
@@ -31,6 +31,7 @@ class InterviewGraphState(TypedDict):
     should_terminate_early: bool
     termination_reason: Optional[str]
     probe_count: int
+    consecutive_probes: int  # NEW: Track consecutive probes
     question_count: int
     total_exchanges: int
     max_questions: int
@@ -38,7 +39,6 @@ class InterviewGraphState(TypedDict):
     waiting_for_clarification: bool
     accumulated_insights: List[str]
     
-    # NEW: Probe decision tracking
     probe_decision: Optional[Dict]
     
     summary: Optional[Dict]
@@ -71,7 +71,7 @@ async def analyze_response_node(state: InterviewGraphState) -> Dict:
         user_response,
         analyzed.sentiment.value,
         new_history,
-        state["probe_count"]
+        state.get("consecutive_probes", 0)  # Use consecutive probes
     )
     
     current_exchanges = state.get("total_exchanges", 0)
@@ -103,7 +103,7 @@ async def analyze_response_node(state: InterviewGraphState) -> Dict:
 
 async def probe_decision_node(state: InterviewGraphState) -> Dict:
     """
-    NEW Step 2: Intelligent probe decision
+    Step 2: Intelligent probe decision
     Uses AI to determine if response is TRULY irrelevant/off-topic
     """
     if state.get("should_terminate_early"):
@@ -114,7 +114,7 @@ async def probe_decision_node(state: InterviewGraphState) -> Dict:
     
     # Get the question that was asked
     last_question = None
-    for msg in reversed(state["conversation_history"][:-1]):  # Skip the user's latest response
+    for msg in reversed(state["conversation_history"][:-1]):
         if msg["role"] == "assistant":
             last_question = msg["content"]
             break
@@ -199,7 +199,8 @@ async def deep_analysis_node(state: InterviewGraphState) -> Dict:
 
 async def internal_probe_node(state: InterviewGraphState) -> Dict:
     """Step 4a: PROBE - only for truly irrelevant responses."""
-    print(f"⚡ PROBING IRRELEVANT RESPONSE (Count: {state['probe_count']})")
+    consecutive_probes = state.get("consecutive_probes", 0)
+    print(f"⚡ PROBING IRRELEVANT RESPONSE (Consecutive: {consecutive_probes})")
     
     # Find the original question
     original_question = None
@@ -236,6 +237,7 @@ async def internal_probe_node(state: InterviewGraphState) -> Dict:
         "current_question": probe_question,
         "conversation_history": new_history,
         "probe_count": state["probe_count"] + 1,
+        "consecutive_probes": consecutive_probes + 1,  # Increment consecutive
         "is_probe": True,
         "total_exchanges": state["total_exchanges"] + 1,
         "waiting_for_clarification": True,
@@ -273,7 +275,8 @@ async def generate_question_node(state: InterviewGraphState) -> Dict:
         "current_question": next_question,
         "conversation_history": new_history,
         "question_count": next_q_number,
-        "probe_count": 0,
+        "probe_count": 0,  # Reset probe count for new question
+        "consecutive_probes": 0,  # RESET consecutive probes on good answer
         "is_probe": False,
         "total_exchanges": state["total_exchanges"] + 1,
         "waiting_for_clarification": False,
@@ -322,13 +325,15 @@ async def generate_summary_node(state: InterviewGraphState) -> Dict:
     }
 
 # ========================================================================
-# CONDITIONAL EDGES - UPDATED WITH INTELLIGENT PROBE DECISION
+# CONDITIONAL EDGES - FIXED: No longer forces termination after 1 probe
 # ========================================================================
 
 def should_probe(state: InterviewGraphState) -> str:
     """
-    NEW: Decides based on INTELLIGENT probe decision agent.
+    Decides based on INTELLIGENT probe decision agent.
     Only probes if response is TRULY irrelevant/off-topic.
+    
+    FIXED: No longer uses probe_count limit - only consecutive_probes matters
     """
     # Priority 1: Early termination
     if state.get("should_terminate_early"):
@@ -336,12 +341,12 @@ def should_probe(state: InterviewGraphState) -> str:
         return "terminate"
     
     probe_decision = state.get("probe_decision", {})
-    probe_count = state["probe_count"]
+    consecutive_probes = state.get("consecutive_probes", 0)
     
-    # Priority 2: Max 1 probe reached
-    if probe_count >= 1:
-        print(f"\n  ⏭️ MAX PROBE (1) REACHED → FORCE NEXT QUESTION")
-        return "next_question"
+    # Priority 2: Too many CONSECUTIVE irrelevant responses (3 in a row)
+    if consecutive_probes >= 3:
+        print(f"\n  🛑 TOO MANY CONSECUTIVE IRRELEVANT RESPONSES ({consecutive_probes}) → TERMINATE")
+        return "terminate"
     
     # Priority 3: Check intelligent probe decision
     should_probe_now = probe_decision.get("should_probe", False)
@@ -349,8 +354,9 @@ def should_probe(state: InterviewGraphState) -> str:
     
     print(f"\n  🎯 Probe Decision: {should_probe_now}")
     print(f"     Reason: {reason}")
+    print(f"     Consecutive probes: {consecutive_probes}/3")
     
-    if should_probe_now and probe_count == 0:
+    if should_probe_now:
         print(f"  ➡️ PROBE (Response is irrelevant/off-topic) ⚡")
         return "probe"
     else:
@@ -386,7 +392,7 @@ def build_interview_workflow():
     
     # Add nodes
     workflow.add_node("analyze_response", analyze_response_node)
-    workflow.add_node("probe_decision", probe_decision_node)  # NEW: Smart decision
+    workflow.add_node("probe_decision", probe_decision_node)
     workflow.add_node("deep_analysis", deep_analysis_node)
     workflow.add_node("internal_probe", internal_probe_node)
     workflow.add_node("generate_question", generate_question_node)
@@ -433,4 +439,5 @@ print("✅ LangGraph workflow compiled with INTELLIGENT PROBE DECISION!")
 print("   🤖 AI Agent decides: Probe ONLY if response is IRRELEVANT/OFF-TOPIC")
 print("   ✅ Short answers OK if on-topic")
 print("   🚨 Probes only for: chess → dance, product → weather, etc.")
+print("   🔄 FIXED: Consecutive probes reset on good answer (max 3 consecutive)")
 print("   Flow: analyze → probe_decision → deep_analysis → [probe OR next_question]")

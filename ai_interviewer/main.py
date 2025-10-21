@@ -174,6 +174,7 @@ async def start_interview(request: StartRequest):
             "should_terminate_early": False,
             "termination_reason": None,
             "probe_count": 0,
+            "consecutive_probes": 0,  # NEW: Track consecutive probes
             "question_count": 0,
             "total_exchanges": 0,
             "max_questions": 15,
@@ -384,6 +385,7 @@ if __name__ == "__main__":
     print("🤖 AI Agent decides: Probe ONLY if response is IRRELEVANT/OFF-TOPIC")
     print("✅ Short answers OK if on-topic (e.g., 'yes', 'good', 'daily')")
     print("🚨 Probes only for truly irrelevant responses (chess → dance, product → weather)")
+    print("🔄 FIXED: Consecutive probes reset on good answer (max 3 consecutive)")
     print("📊 Flow: analyze → probe_decision → deep_analysis → [probe OR next_question]")
     uvicorn.run(
         app,

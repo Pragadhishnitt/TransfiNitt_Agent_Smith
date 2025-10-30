@@ -165,7 +165,7 @@ The entire platform is **fully containerized** for easy deployment and developme
 ## 🔐 **Security & Authentication**
 
 - JWT-based authentication
-- Supabase integration for user management
+- Postgres integration for user management
 - Protected routes and API endpoints
 - Secure session management
 
@@ -188,7 +188,7 @@ The entire platform is **fully containerized** for easy deployment and developme
 
 Copy `.env.example` to `.env` in each service folder and configure:
 - Database URLs
-- API keys (Groq, Supabase)
+- API keys (Groq, Cerebras(optional))
 - JWT secrets
 - Service URLs
 

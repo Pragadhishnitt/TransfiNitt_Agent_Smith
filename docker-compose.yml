@@ -46,7 +46,7 @@ services:
       dockerfile: Dockerfile
     container_name: transfinitt_backend
     environment:
-      # PostgreSQL connection (NOT Supabase)
+      # PostgreSQL connection 
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       AGENT_URL: http://ai_interviewer:8001
@@ -77,7 +77,7 @@ services:
       # AI API Keys
       GROQ_API_KEY: ${GROQ_API_KEY}
       CEREBRAS_API_KEY: ${CEREBRAS_API_KEY}
-      # Redis connection (NOT Supabase Redis)
+      # Redis connection 
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: ${REDIS_DB:-0}

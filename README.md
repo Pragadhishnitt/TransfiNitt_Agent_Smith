@@ -95,7 +95,7 @@ TransfiNitt_Agent_Smith/
 
 3. **Start all services with Docker Compose**:
    ```bash
-   docker-compose up
+   docker compose up
    ```
 
    This single command will start all services:

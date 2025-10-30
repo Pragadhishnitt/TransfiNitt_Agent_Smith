@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -15,26 +9,35 @@ datasource db {
 }
 
 model User {
-  id            String     @id @default(uuid())
-  email         String     @unique
-  password_hash String
-  role          String
-  created_at    DateTime   @default(now())
-  templates     Template[]
-  sessions      Session[]  @relation("UserSessions")
-  respondent    Respondent?
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  password_hash      String
+  role               String    @default("researcher")
+  
+  reset_token        String?   @unique
+  reset_token_expiry DateTime?
+  
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  templates          Template[]
+  sessions           Session[] @relation("UserSessions")
+  respondent_profile Respondent?
+
+  @@index([email])
+  @@index([reset_token])
 }
 
 model Template {
-  id               String     @id @default(uuid())
-  researcher_id    String
-  title            String
-  topic            String?
+  id                String     @id @default(uuid())
+  researcher_id     String
+  title             String
+  topic             String?
   starter_questions Json
-  created_at       DateTime   @default(now())
+  created_at        DateTime   @default(now())
 
-  researcher User @relation(fields: [researcher_id], references: [id])
-  sessions   Session[]
+  researcher User      @relation(fields: [researcher_id], references: [id])
+  sessions   Session[] @relation("TemplateSessions")
 }
 
 model Session {
@@ -50,7 +53,7 @@ model Session {
   completed_at     DateTime?
   duration_seconds Int?
 
-  template   Template  @relation(fields: [template_id], references: [id])
+  template   Template  @relation("TemplateSessions", fields: [template_id], references: [id])
   respondent User      @relation("UserSessions", fields: [respondent_id], references: [id])
   incentives Incentive[]
 }

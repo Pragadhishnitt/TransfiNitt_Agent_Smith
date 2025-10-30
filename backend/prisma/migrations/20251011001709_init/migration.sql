@@ -1,15 +1,22 @@
--- CreateTable
+-- ===========================
+-- PRISMA MIGRATION: 001_init
+-- ===========================
+
+-- CreateTable: User
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "password_hash" TEXT NOT NULL,
     "role" TEXT NOT NULL,
+    "reset_token" TEXT,
+    "reset_token_expiry" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: Template
 CREATE TABLE "Template" (
     "id" TEXT NOT NULL,
     "researcher_id" TEXT NOT NULL,
@@ -21,7 +28,7 @@ CREATE TABLE "Template" (
     CONSTRAINT "Template_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: Session
 CREATE TABLE "Session" (
     "id" TEXT NOT NULL,
     "template_id" TEXT NOT NULL,
@@ -38,7 +45,7 @@ CREATE TABLE "Session" (
     CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: Respondent
 CREATE TABLE "Respondent" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
@@ -52,7 +59,7 @@ CREATE TABLE "Respondent" (
     CONSTRAINT "Respondent_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: Incentive
 CREATE TABLE "Incentive" (
     "id" TEXT NOT NULL,
     "respondent_id" TEXT NOT NULL,
@@ -64,26 +71,49 @@ CREATE TABLE "Incentive" (
     CONSTRAINT "Incentive_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
+-- CreateIndexes
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-
--- CreateIndex
 CREATE UNIQUE INDEX "Respondent_user_id_key" ON "Respondent"("user_id");
 
--- AddForeignKey
-ALTER TABLE "Template" ADD CONSTRAINT "Template_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE INDEX "users_email_idx" ON "User"("email");
+CREATE INDEX "users_reset_token_idx" ON "User"("reset_token");
+CREATE INDEX "templates_researcher_id_idx" ON "Template"("researcher_id");
+CREATE INDEX "sessions_template_id_idx" ON "Session"("template_id");
+CREATE INDEX "sessions_respondent_id_idx" ON "Session"("respondent_id");
+CREATE INDEX "sessions_status_idx" ON "Session"("status");
+CREATE INDEX "sessions_completed_at_idx" ON "Session"("completed_at");
+CREATE INDEX "respondents_user_id_idx" ON "Respondent"("user_id");
+CREATE INDEX "incentives_respondent_id_idx" ON "Incentive"("respondent_id");
+CREATE INDEX "incentives_session_id_idx" ON "Incentive"("session_id");
+CREATE INDEX "incentives_status_idx" ON "Incentive"("status");
 
--- AddForeignKey
-ALTER TABLE "Session" ADD CONSTRAINT "Session_template_id_fkey" FOREIGN KEY ("template_id") REFERENCES "Template"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKeys
+ALTER TABLE "Template"
+  ADD CONSTRAINT "Template_researcher_id_fkey"
+  FOREIGN KEY ("researcher_id") REFERENCES "User"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "Session" ADD CONSTRAINT "Session_respondent_id_fkey" FOREIGN KEY ("respondent_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Session"
+  ADD CONSTRAINT "Session_template_id_fkey"
+  FOREIGN KEY ("template_id") REFERENCES "Template"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "Respondent" ADD CONSTRAINT "Respondent_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Session"
+  ADD CONSTRAINT "Session_respondent_id_fkey"
+  FOREIGN KEY ("respondent_id") REFERENCES "User"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "Incentive" ADD CONSTRAINT "Incentive_respondent_id_fkey" FOREIGN KEY ("respondent_id") REFERENCES "Respondent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Respondent"
+  ADD CONSTRAINT "Respondent_user_id_fkey"
+  FOREIGN KEY ("user_id") REFERENCES "User"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "Incentive" ADD CONSTRAINT "Incentive_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "Session"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Incentive"
+  ADD CONSTRAINT "Incentive_respondent_id_fkey"
+  FOREIGN KEY ("respondent_id") REFERENCES "Respondent"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "Incentive"
+  ADD CONSTRAINT "Incentive_session_id_fkey"
+  FOREIGN KEY ("session_id") REFERENCES "Session"("id")
+  ON DELETE RESTRICT ON UPDATE CASCADE;

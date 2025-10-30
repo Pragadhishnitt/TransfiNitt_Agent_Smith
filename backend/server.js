@@ -7,15 +7,18 @@ import { PrismaClient } from './generated/prisma/index.js';
 import { generateToken, verifyToken, hashPassword, comparePassword } from './auth.js';
 import requestLogger from './logger.js';
 import dotenv from 'dotenv';
+import { validatePasswordEnhancedMiddleware, validatePassword, getPasswordStrength } from './passwordValidator.js';
+import fetch from 'node-fetch';
 
 dotenv.config();
-
-
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 8000;
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8001';
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Middleware
 app.use(requestLogger);
@@ -34,18 +37,16 @@ app.use(express.json());
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: false, // true for 465, false for other ports (587 uses STARTTLS)
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD
   },
   tls: {
-    // Don't fail on invalid certs (useful for development)
     rejectUnauthorized: false
   }
 });
 
-// Verify transporter configuration
 transporter.verify((error, success) => {
   if (error) {
     console.error('❌ Email transporter verification failed:', error);
@@ -54,7 +55,6 @@ transporter.verify((error, success) => {
   }
 });
 
-// Send interview invitation email
 const sendInterviewInvitation = async (recipientEmail, recipientName, interviewLink, templateTitle) => {
   const mailOptions = {
     from: `"Interview Platform" <${process.env.EMAIL_USER}>`,
@@ -133,7 +133,6 @@ const sendInterviewInvitation = async (recipientEmail, recipientName, interviewL
   }
 };
 
-// Send completion confirmation email
 const sendCompletionEmail = async (recipientEmail, recipientName, templateTitle, incentiveAmount) => {
   const mailOptions = {
     from: `"Interview Platform" <${process.env.EMAIL_USER}>`,
@@ -199,7 +198,17 @@ const sendCompletionEmail = async (recipientEmail, recipientName, templateTitle,
 
 // Helper functions
 const success = (res, data) => res.json({ success: true, ...data });
-const error = (res, code, message, status = 400) => res.status(status).json({ success: false, error: { code, message }});
+const error = (res, code, message, status = 400, details = null) => {
+  const errorResponse = {
+    success: false,
+    error: {
+      code,
+      message,
+      ...(details && { details })
+    }
+  };
+  return res.status(status).json(errorResponse);
+};
 const generateCode = () => crypto.randomBytes(4).toString('hex');
 
 // ============================================
@@ -210,11 +219,11 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// AUTH ROUTES
+// AUTH ROUTES - COMPLETE REPLACEMENT
 // ============================================
 
 // Register
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', validatePasswordEnhancedMiddleware, async (req, res) => {
   try {
     const { email, password, role } = req.body;
     
@@ -222,60 +231,356 @@ app.post('/api/auth/register', async (req, res) => {
       return error(res, 'MISSING_FIELDS', 'Email, password and role required');
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return error(res, 'INVALID_EMAIL', 'Invalid email format');
+    }
+
+    // Validate role
+    if (!['researcher', 'respondent'].includes(role)) {
+      return error(res, 'INVALID_ROLE', 'Role must be either researcher or respondent');
+    }
+
+    // DB health check
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError) {
+      console.error('Database connection error:', dbError);
+      return error(res, 'DATABASE_ERROR', 'Unable to connect to database', 500);
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return error(res, 'USER_EXISTS', 'User with this email already exists');
+    }
+
+    // Hash password & create user
     const hashedPassword = await hashPassword(password);
-    
     const user = await prisma.user.create({
-      data: {
-        email,
-        password_hash: hashedPassword,
-        role
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true
-      }
+      data: { email, password_hash: hashedPassword, role },
+      select: { id: true, email: true, role: true }
     });
 
+    // Generate token
     const token = generateToken(user);
-    success(res, { token, user });
+
+    // ✅ Send the same response your frontend expects
+    return success(res, { token, user });
+
   } catch (err) {
+    console.error('Registration error:', err);
     if (err.code === 'P2002') {
-      return error(res, 'EMAIL_EXISTS', 'Email already registered');
+      return error(res, 'USER_EXISTS', 'User already exists');
     }
-    console.error(err);
-    error(res, 'SERVER_ERROR', 'Registration failed', 500);
+    return error(res, 'REGISTRATION_FAILED', 'Failed to register user', 500);
   }
 });
+
+
 
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_FIELDS',
+          message: 'Email and password required'
+        }
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email }
     });
-    console.log(user);
     
     if (!user) {
-      return error(res, 'INVALID_CREDENTIALS', 'Invalid email or password', 401);
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid email or password'
+        }
+      });
     }
 
     const validPassword = await comparePassword(password, user.password_hash);
 
     if (!validPassword) {
-      return error(res, 'INVALID_CREDENTIALS', 'Invalid email or password', 401);
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid email or password'
+        }
+      });
     }
 
     const token = generateToken(user);
-    success(res, { 
+    
+    return res.json({
+      success: true,
       token, 
-      user: { id: user.id, email: user.email, role: user.role }
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role 
+      }
     });
   } catch (err) {
-    console.error(err);
-    error(res, 'SERVER_ERROR', 'Login failed', 500);
+    console.error('Login error:', err);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Login failed'
+      }
+    });
+  }
+});
+
+// Password validation endpoint
+app.post('/api/auth/validate-password', (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_PASSWORD',
+          message: 'Password is required'
+        }
+      });
+    }
+
+    const validation = validatePassword(password);
+    const strength = getPasswordStrength(password);
+
+    return res.json({
+      success: true,
+      isValid: validation.isValid,
+      errors: validation.errors,
+      strength: strength
+    });
+  } catch (err) {
+    console.error('Password validation error:', err);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Validation failed'
+      }
+    });
+  }
+});
+
+// Change password endpoint
+app.post('/api/auth/change-password', verifyToken, validatePasswordEnhancedMiddleware, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_FIELDS',
+          message: 'Current password and new password required'
+        }
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found'
+        }
+      });
+    }
+
+    const validPassword = await comparePassword(current_password, user.password_hash);
+
+    if (!validPassword) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_PASSWORD',
+          message: 'Current password is incorrect'
+        }
+      });
+    }
+
+    const samePassword = await comparePassword(new_password, user.password_hash);
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'SAME_PASSWORD',
+          message: 'New password must be different from current password'
+        }
+      });
+    }
+
+    const hashedPassword = await hashPassword(new_password);
+    
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { password_hash: hashedPassword }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Failed to change password'
+      }
+    });
+  }
+});
+
+// Forgot password endpoint
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_EMAIL',
+          message: 'Email is required'
+        }
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        reset_token: resetToken,
+        reset_token_expiry: resetTokenExpiry
+      }
+    });
+
+    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+    
+    await transporter.sendMail({
+      from: `"Interview Platform" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Password Reset Request',
+      html: `
+        <h2>Password Reset</h2>
+        <p>You requested a password reset. Click the link below to reset your password:</p>
+        <a href="${resetLink}">${resetLink}</a>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      `
+    });
+
+    return res.json({
+      success: true,
+      message: 'If an account with that email exists, a password reset link has been sent.'
+    });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Failed to process password reset'
+      }
+    });
+  }
+});
+
+// Reset password endpoint
+app.post('/api/auth/reset-password', validatePasswordEnhancedMiddleware, async (req, res) => {
+  try {
+    const { token, new_password } = req.body;
+
+    if (!token || !new_password) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_FIELDS',
+          message: 'Token and new password required'
+        }
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        reset_token: token,
+        reset_token_expiry: {
+          gte: new Date()
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid or expired reset token'
+        }
+      });
+    }
+
+    const hashedPassword = await hashPassword(new_password);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password_hash: hashedPassword,
+        reset_token: null,
+        reset_token_expiry: null
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Password reset successful'
+    });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Failed to reset password'
+      }
+    });
   }
 });
 
@@ -283,7 +588,6 @@ app.post('/api/auth/login', async (req, res) => {
 // TEMPLATES ROUTES (Protected)
 // ============================================
 
-// Get all templates
 app.get('/api/templates', verifyToken, async (req, res) => {
   try {
     const templates = await prisma.template.findMany({
@@ -308,7 +612,6 @@ app.get('/api/templates', verifyToken, async (req, res) => {
   }
 });
 
-// Get single template
 app.get('/api/templates/:id', verifyToken, async (req, res) => {
   try {
     const template = await prisma.template.findFirst({
@@ -329,7 +632,6 @@ app.get('/api/templates/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Create template
 app.post('/api/templates', verifyToken, async (req, res) => {
   try {
     const { title, topic, starter_questions } = req.body;
@@ -357,13 +659,11 @@ app.post('/api/templates', verifyToken, async (req, res) => {
   }
 });
 
-// Get all session IDs for a specific template
 app.get('/api/templates/:id/sessions', verifyToken, async (req, res) => {
   try {
     const templateId = req.params.id;
     console.log('Fetching sessions for template:', templateId);
 
-    // Verify template belongs to researcher
     const template = await prisma.template.findFirst({
       where: {
         id: templateId,
@@ -378,7 +678,6 @@ app.get('/api/templates/:id/sessions', verifyToken, async (req, res) => {
 
     console.log('Template found:', template.title);
 
-    // Get all sessions for this template
     const sessions = await prisma.session.findMany({
       where: {
         template_id: templateId
@@ -420,13 +719,11 @@ app.get('/api/templates/:id/sessions', verifyToken, async (req, res) => {
   }
 });
 
-// Get all respondent IDs who haven't attended any session under this template
 app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res) => {
   try {
     const templateId = req.params.id;
     console.log('Fetching available respondents for template:', templateId);
 
-    // Verify template belongs to researcher
     const template = await prisma.template.findFirst({
       where: {
         id: templateId,
@@ -441,7 +738,6 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
 
     console.log('Template found:', template.title);
 
-    // Get all respondent IDs who have already attended sessions for this template
     const attendedRespondents = await prisma.session.findMany({
       where: {
         template_id: templateId
@@ -454,7 +750,6 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
     const attendedRespondentIds = attendedRespondents.map(s => s.respondent_id);
     console.log('Attended respondent IDs:', attendedRespondentIds);
 
-    // Get all respondents who haven't attended any session for this template
     const availableRespondents = await prisma.user.findMany({
       where: {
         role: 'respondent',
@@ -504,15 +799,12 @@ app.get('/api/templates/:id/available-respondents', verifyToken, async (req, res
   }
 });
 
-import fetch from 'node-fetch';
-
 app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
   console.log('Generating market research report...');
   try {
     const templateId = req.params.id;
     console.log('Generating report for template:', templateId);
 
-    // === Verify template belongs to researcher ===
     const template = await prisma.template.findFirst({
       where: {
         id: templateId,
@@ -526,7 +818,6 @@ app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
       return error(res, 'NOT_FOUND', 'Template not found', 404);
     }
 
-    // === Get all completed sessions ===
     const sessions = await prisma.session.findMany({
       where: { template_id: templateId, status: 'completed' },
       select: {
@@ -548,7 +839,6 @@ app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
 
     console.log(`Found ${sessions.length} completed sessions`);
 
-    // === Prepare session payload ===
     const fullSessions = await Promise.all(
       sessions.map(async (session) => {
         const respondent = await prisma.respondent.findUnique({
@@ -568,9 +858,8 @@ app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
       })
     );
 
-    // === Limit payload for Gemini (approximate token limit control) ===
     let totalChars = 0;
-    const MAX_CHARS = 20000; // ~3k tokens (safe buffer)
+    const MAX_CHARS = 20000;
     const limitedSessions = [];
 
     for (const s of fullSessions) {
@@ -582,7 +871,6 @@ app.post('/api/templates/:id/report', verifyToken, async (req, res) => {
 
     console.log(`Using ${limitedSessions.length}/${sessions.length} sessions for Gemini prompt`);
 
-    // === Gemini API Call ===
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -632,7 +920,6 @@ ${JSON.stringify(limitedSessions, null, 2)}
     console.log('Report generated successfully');
     console.log('Report:', reportText);
     
-    // === Extract and aggregate themes from sessions ===
     const allThemes = [];
     sessions.forEach(session => {
       if (session.key_themes && Array.isArray(session.key_themes)) {
@@ -640,19 +927,16 @@ ${JSON.stringify(limitedSessions, null, 2)}
       }
     });
     
-    // Count theme occurrences
     const themeCounts = {};
     allThemes.forEach(theme => {
       themeCounts[theme] = (themeCounts[theme] || 0) + 1;
     });
     
-    // Convert to array and sort by count
     const topThemes = Object.entries(themeCounts)
       .map(([theme, count]) => ({ theme, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10); // Top 10 themes
+      .slice(0, 10);
     
-    // === Return report ===
     success(res, {
       template_id: templateId,
       template_title: template.title,
@@ -672,7 +956,6 @@ ${JSON.stringify(limitedSessions, null, 2)}
 // SESSIONS ROUTES (Protected - for researchers)
 // ============================================
 
-// Create new interview session (generate link) - WITH EMAIL SUPPORT
 app.post('/api/sessions/create', verifyToken, async (req, res) => {
   try {
     const { template_id, respondent_name, respondent_email, send_email } = req.body;
@@ -681,7 +964,6 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
       return error(res, 'INVALID_INPUT', 'template_id required');
     }
 
-    // Verify template belongs to researcher
     const template = await prisma.template.findFirst({
       where: {
         id: template_id,
@@ -695,7 +977,6 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
 
     const linkCode = generateCode();
     
-    // Create a temporary user for the respondent (or use existing)
     let respondentUser;
     if (respondent_email) {
       respondentUser = await prisma.user.findUnique({
@@ -712,7 +993,6 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
         });
       }
     } else {
-      // Create anonymous user
       respondentUser = await prisma.user.create({
         data: {
           email: `anonymous-${linkCode}@temp.com`,
@@ -732,7 +1012,6 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
 
     const interviewLink = `http://localhost:3001/interview/${session.id}`;
 
-    // Send email if requested and email is provided
     let emailSent = false;
     if (send_email && respondent_email) {
       try {
@@ -743,10 +1022,9 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
           template.title
         );
         emailSent = true;
-        console.log(`✉️  Interview invitation sent to ${respondent_email}`);
+        console.log(`✉️ Interview invitation sent to ${respondent_email}`);
       } catch (emailError) {
         console.error('Failed to send email:', emailError);
-        // Don't fail the entire request if email fails
       }
     }
 
@@ -763,7 +1041,6 @@ app.post('/api/sessions/create', verifyToken, async (req, res) => {
   }
 });
 
-// Get all sessions (interviews) for researcher
 app.get('/api/sessions', verifyToken, async (req, res) => {
   try {
     const sessions = await prisma.session.findMany({
@@ -789,7 +1066,7 @@ app.get('/api/sessions', verifyToken, async (req, res) => {
       template_title: s.template.title,
       respondent: {
         email: s.respondent.email,
-        name: s.respondent.email.split('@')[0] // Simple name extraction
+        name: s.respondent.email.split('@')[0]
       },
       status: s.status,
       sentiment_score: s.sentiment_score ? parseFloat(s.sentiment_score) : null,
@@ -805,7 +1082,6 @@ app.get('/api/sessions', verifyToken, async (req, res) => {
   }
 });
 
-// Get single session details
 app.get('/api/sessions/:id', verifyToken, async (req, res) => {
   try {
     const session = await prisma.session.findFirst({
@@ -829,7 +1105,6 @@ app.get('/api/sessions/:id', verifyToken, async (req, res) => {
       return error(res, 'NOT_FOUND', 'Session not found', 404);
     }
 
-    // Calculate sentiment breakdown if exists
     let sentimentBreakdown = { positive: 0, neutral: 0, negative: 0 };
     if (session.sentiment_score) {
       const score = parseFloat(session.sentiment_score);
@@ -870,7 +1145,6 @@ app.get('/api/sessions/:id', verifyToken, async (req, res) => {
 // INTERVIEW ROUTES (Public - for respondents)
 // ============================================
 
-// Get interview details (when respondent opens link)
 app.get('/api/interviews/:session_id', async (req, res) => {
   try {
     const session = await prisma.session.findUnique({
@@ -908,7 +1182,6 @@ app.get('/api/interviews/:session_id', async (req, res) => {
   }
 });
 
-// Start interview
 app.post('/api/interviews/:session_id/start', async (req, res) => {
   try {
     const { respondent_name, respondent_email } = req.body;
@@ -931,7 +1204,6 @@ app.post('/api/interviews/:session_id/start', async (req, res) => {
       return error(res, 'ALREADY_COMPLETED', 'Interview already completed');
     }
 
-    // Check for duplicate by email if provided
     if (respondent_email) {
       const existingSession = await prisma.session.findFirst({
         where: {
@@ -948,7 +1220,6 @@ app.post('/api/interviews/:session_id/start', async (req, res) => {
       }
     }
 
-    // Update session
     await prisma.session.update({
       where: { id: session_id },
       data: {
@@ -957,7 +1228,6 @@ app.post('/api/interviews/:session_id/start', async (req, res) => {
       }
     });
 
-    // Call agent service to start interview
     try {
       const agentResponse = await axios.post(`${AGENT_URL}/agent/start`, {
         session_id: session.id,
@@ -971,7 +1241,6 @@ app.post('/api/interviews/:session_id/start', async (req, res) => {
       });
     } catch (agentErr) {
       console.error('Agent error:', agentErr.message);
-      // Fallback if agent service is down
       const questions = session.template.starter_questions;
       const firstQuestion = Array.isArray(questions) && questions.length > 0 
         ? questions[0] 
@@ -988,7 +1257,6 @@ app.post('/api/interviews/:session_id/start', async (req, res) => {
   }
 });
 
-// Send message (interview loop) - WITH COMPLETION EMAIL
 app.post('/api/interviews/:session_id/message', async (req, res) => {
   try {
     const { message } = req.body;
@@ -1014,21 +1282,17 @@ app.post('/api/interviews/:session_id/message', async (req, res) => {
       return error(res, 'INVALID_STATUS', 'Interview not active');
     }
 
-    // Call agent service
     try {
       const agentResponse = await axios.post(`${AGENT_URL}/agent/chat`, {
         session_id: session.id,
         message
       });
 
-      // Check if interview is complete
       if (agentResponse.data.is_complete) {
-        // Get final summary from agent
         const endResponse = await axios.post(`${AGENT_URL}/agent/end`, {
           session_id: session.id
         });
 
-        // Save to database
         await prisma.session.update({
           where: { id: session_id },
           data: {
@@ -1042,7 +1306,6 @@ app.post('/api/interviews/:session_id/message', async (req, res) => {
           }
         });
 
-        // Send completion email if valid email
         if (session.respondent.email && !session.respondent.email.includes('@temp.com')) {
           try {
             await sendCompletionEmail(
@@ -1051,7 +1314,7 @@ app.post('/api/interviews/:session_id/message', async (req, res) => {
               session.template.title,
               5.00
             );
-            console.log(`✉️  Completion email sent to ${session.respondent.email}`);
+            console.log(`✉️ Completion email sent to ${session.respondent.email}`);
           } catch (emailError) {
             console.error('Failed to send completion email:', emailError);
           }
@@ -1064,7 +1327,6 @@ app.post('/api/interviews/:session_id/message', async (req, res) => {
         });
       }
 
-      // Return next question
       success(res, {
         next_question: agentResponse.data.next_question,
         is_probe: agentResponse.data.is_probe || false,
@@ -1089,7 +1351,6 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
   try {
     const { template_id } = req.query;
     
-    // Build where clause based on whether template_id is provided
     const whereClause = {
       template: {
         researcher_id: req.user.id
@@ -1097,7 +1358,6 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
       status: 'completed'
     };
     
-    // If template_id is provided, filter by that template
     if (template_id) {
       whereClause.template_id = template_id;
     }
@@ -1120,7 +1380,6 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
     const neutralCount = sentiments.filter(s => s >= 0.4 && s < 0.6).length;
     const negativeCount = sentiments.filter(s => s < 0.4).length;
 
-    // Extract and aggregate themes from sessions
     const allThemes = [];
     sessions.forEach(session => {
       if (session.key_themes && Array.isArray(session.key_themes)) {
@@ -1128,17 +1387,15 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
       }
     });
     
-    // Count theme occurrences
     const themeCounts = {};
     allThemes.forEach(theme => {
       themeCounts[theme] = (themeCounts[theme] || 0) + 1;
     });
     
-    // Convert to array and sort by count
     const topThemes = Object.entries(themeCounts)
       .map(([theme, count]) => ({ theme, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10); // Top 10 themes
+      .slice(0, 10);
 
     success(res, {
       total_interviews: totalInterviews,
@@ -1156,10 +1413,8 @@ app.get('/api/insights/overview', verifyToken, async (req, res) => {
   }
 });
 
-// Get completion rate and average duration stats (all templates)
 app.get('/api/insights/stats', verifyToken, async (req, res) => {
   try {
-    // Get all sessions for the researcher
     const allSessions = await prisma.session.findMany({
       where: {
         template: {
@@ -1175,12 +1430,10 @@ app.get('/api/insights/stats', verifyToken, async (req, res) => {
     const totalSessions = allSessions.length;
     const completedSessions = allSessions.filter(s => s.status === 'completed').length;
 
-    // Calculate completion rate
     const completionRate = totalSessions > 0 
       ? (completedSessions / totalSessions) * 100 
       : 0;
 
-    // Calculate average duration from completed sessions
     const completedSessionsWithDuration = allSessions.filter(
       s => s.status === 'completed' && s.duration_seconds != null
     );
@@ -1201,12 +1454,10 @@ app.get('/api/insights/stats', verifyToken, async (req, res) => {
   }
 });
 
-// Get completion rate and average duration stats for a specific template
 app.get('/api/insights/stats/:template_id', verifyToken, async (req, res) => {
   try {
     const templateId = req.params.template_id;
 
-    // Verify template belongs to researcher
     const template = await prisma.template.findFirst({
       where: {
         id: templateId,
@@ -1218,7 +1469,6 @@ app.get('/api/insights/stats/:template_id', verifyToken, async (req, res) => {
       return error(res, 'NOT_FOUND', 'Template not found', 404);
     }
 
-    // Get all sessions for this specific template
     const allSessions = await prisma.session.findMany({
       where: {
         template_id: templateId
@@ -1232,12 +1482,10 @@ app.get('/api/insights/stats/:template_id', verifyToken, async (req, res) => {
     const totalSessions = allSessions.length;
     const completedSessions = allSessions.filter(s => s.status === 'completed').length;
 
-    // Calculate completion rate
     const completionRate = totalSessions > 0 
       ? (completedSessions / totalSessions) * 100 
       : 0;
 
-    // Calculate average duration from completed sessions
     const completedSessionsWithDuration = allSessions.filter(
       s => s.status === 'completed' && s.duration_seconds != null
     );
@@ -1260,13 +1508,11 @@ app.get('/api/insights/stats/:template_id', verifyToken, async (req, res) => {
   }
 });
 
-// Get marketing research report for a specific template
 app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
   try {
     const templateId = req.params.template_id;
     console.log('Fetching insights report for template:', templateId);
 
-    // Verify template belongs to researcher
     const template = await prisma.template.findFirst({
       where: {
         id: templateId,
@@ -1278,7 +1524,6 @@ app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
       return error(res, 'NOT_FOUND', 'Template not found', 404);
     }
 
-    // Make internal call to the templates/:id/report endpoint
     const baseUrl = `http://localhost:${process.env.PORT || 8000}`;
     const reportUrl = `${baseUrl}/api/templates/${templateId}/report`;
     
@@ -1288,7 +1533,7 @@ app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization // Pass through the auth token
+        'Authorization': req.headers.authorization
       }
     });
 
@@ -1300,7 +1545,6 @@ app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
     const reportData = await reportResponse.json();
     console.log('Report data received:', reportData);
 
-    // Return the report data in the same format
     success(res, {
       template_id: templateId,
       template_title: template.title,
@@ -1318,7 +1562,6 @@ app.get('/api/insights/:template_id', verifyToken, async (req, res) => {
 // RESPONDENTS ROUTES
 // ============================================
 
-// Get all respondents
 app.get('/api/respondents', verifyToken, async (req, res) => {
   try {
     const respondents = await prisma.respondent.findMany({
@@ -1350,7 +1593,6 @@ app.get('/api/respondents', verifyToken, async (req, res) => {
   }
 });
 
-// Get single respondent
 app.get('/api/respondents/:id', verifyToken, async (req, res) => {
   try {
     const respondent = await prisma.respondent.findUnique({
@@ -1410,7 +1652,6 @@ app.get('/api/respondents/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Add respondent to panel
 app.post('/api/respondents', verifyToken, async (req, res) => {
   try {
     const { name, email, demographics } = req.body;
@@ -1419,7 +1660,6 @@ app.post('/api/respondents', verifyToken, async (req, res) => {
       return error(res, 'INVALID_INPUT', 'Name and email required');
     }
 
-    // Create or get user
     let user = await prisma.user.findUnique({ where: { email } });
     
     if (!user) {
@@ -1432,7 +1672,6 @@ app.post('/api/respondents', verifyToken, async (req, res) => {
       });
     }
 
-    // Check if respondent already exists
     const existingRespondent = await prisma.respondent.findUnique({
       where: { user_id: user.id }
     });
@@ -1460,7 +1699,6 @@ app.post('/api/respondents', verifyToken, async (req, res) => {
 // INCENTIVES ROUTES
 // ============================================
 
-// Get pending incentives
 app.get('/api/incentives/pending', verifyToken, async (req, res) => {
   try {
     const incentives = await prisma.incentive.findMany({
@@ -1498,7 +1736,6 @@ app.get('/api/incentives/pending', verifyToken, async (req, res) => {
   }
 });
 
-// Pay incentive
 app.post('/api/incentives/:id/pay', verifyToken, async (req, res) => {
   try {
     const incentive = await prisma.incentive.update({
@@ -1537,7 +1774,6 @@ app.post('/api/surveys/generate', verifyToken, async (req, res) => {
       return error(res, 'INVALID_INPUT', 'template_id required');
     }
 
-    // Get sessions to analyze
     const whereClause = {
       template_id,
       status: 'completed'
@@ -1560,7 +1796,6 @@ app.post('/api/surveys/generate', verifyToken, async (req, res) => {
       return error(res, 'NO_DATA', 'No completed sessions found');
     }
 
-    // Extract all themes
     const allThemes = [];
     sessions.forEach(s => {
       if (s.key_themes && Array.isArray(s.key_themes)) {
@@ -1568,19 +1803,16 @@ app.post('/api/surveys/generate', verifyToken, async (req, res) => {
       }
     });
 
-    // Count theme frequency
     const themeCounts = {};
     allThemes.forEach(theme => {
       themeCounts[theme] = (themeCounts[theme] || 0) + 1;
     });
 
-    // Get top 5 themes
     const topThemes = Object.entries(themeCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([theme]) => theme);
 
-    // Generate survey questions based on themes
     const questions = [
       {
         type: 'scale',
@@ -1605,7 +1837,7 @@ app.post('/api/surveys/generate', verifyToken, async (req, res) => {
 });
 
 // ============================================
-// GET TRANSCRIPT (After completion)
+// GET TRANSCRIPT
 // ============================================
 
 app.get('/api/interviews/:session_id/transcript', async (req, res) => {

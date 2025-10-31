@@ -6,6 +6,7 @@ import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
+import AuthCallback from './components/Auth/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import Templates from './pages/Templates';
 import Sessions from './pages/Sessions';
@@ -39,37 +40,44 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    return (
-      <Router>
-        <div className="min-h-screen bg-gray-50 dark:bg-boxdark">
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </div>
-      </Router>
-    );
-  }
+  const handleAuthCallback = () => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      localStorage.setItem('authToken', token);
+      window.location.href = '/dashboard';
+    }
+  };
 
   return (
     <Router>
-      <Layout isDark={isDark} setIsDark={setIsDark}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/templates" element={<Templates />} />
-          <Route path="/sample" element={<Sample />} />
-          <Route path="/sessions" element={<Sessions />} />
-          <Route path="/respondents" element={<Respondents />} />
-          <Route path="/insights" element={<Insights />} />
-          <Route path="/survey" element={<SurveyGenerator />} />
-          <Route path="/incentives" element={<Incentives />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="/register" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <div className="min-h-screen bg-gray-50 dark:bg-boxdark">
+        {!user ? (
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        ) : (
+          <Layout isDark={isDark} setIsDark={setIsDark}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/sample" element={<Sample />} />
+              <Route path="/sessions" element={<Sessions />} />
+              <Route path="/respondents" element={<Respondents />} />
+              <Route path="/insights" element={<Insights />} />
+              <Route path="/survey" element={<SurveyGenerator />} />
+              <Route path="/incentives" element={<Incentives />} />
+              <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/register" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </Layout>
+        )}
+      </div>
     </Router>
   );
 }

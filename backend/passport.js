@@ -21,6 +21,7 @@ passport.deserializeUser(async (id, done) => {
 // =========================================================
 // GOOGLE STRATEGY  ✅ Only if ENV variables are set
 // =========================================================
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(
     new GoogleStrategy(

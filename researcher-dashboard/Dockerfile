@@ -1,5 +1,5 @@
-FROM node:20-alpine AS builder
 
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
@@ -11,18 +11,24 @@ RUN npm ci
 # Copy application code
 COPY . .
 
-# Build the application
+# Build with cache busting
+ARG CACHEBUST=1
 RUN npm run build
 
 # Production stage
 FROM nginx:alpine
 
-# Copy built files from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Add cache-busting headers
+RUN echo 'add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";' >> /etc/nginx/conf.d/default.conf
 
 EXPOSE 8090
 

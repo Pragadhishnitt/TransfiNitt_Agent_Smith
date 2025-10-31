@@ -23,9 +23,27 @@ model User {
   templates          Template[]
   sessions           Session[] @relation("UserSessions")
   respondent_profile Respondent?
+  auth_providers     AuthProvider[]
 
   @@index([email])
   @@index([reset_token])
+}
+
+model AuthProvider {
+  id            String    @id @default(uuid())
+  user_id       String
+  provider      String
+  provider_id   String
+  access_token  String?   @db.Text
+  refresh_token String?   @db.Text
+  created_at    DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, provider_id])
+  @@index([user_id])
+  @@index([provider])
+  @@map("auth_providers")
 }
 
 model Template {

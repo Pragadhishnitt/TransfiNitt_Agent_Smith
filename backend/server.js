@@ -33,16 +33,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Session and Passport Setup
-app.use(expressSession({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false
-}));
-
-app.use(passport.initialize());
-app.use(passport.session());
-
 // ============================================
 // EMAIL CONFIGURATION
 // ============================================
@@ -364,21 +354,12 @@ app.post('/api/auth/login', async (req, res) => {
     });
   }
 });
-
-// ============================================
-// AUTH VERIFICATION ROUTES
-// ============================================
-
-// Token verification endpoint
 app.get('/api/auth/verify', verifyToken, async (req, res) => {
   try {
+    // req.user is populated by verifyToken middleware
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-      }
+      select: { id: true, email: true, role: true }
     });
 
     if (!user) {
@@ -387,33 +368,8 @@ app.get('/api/auth/verify', verifyToken, async (req, res) => {
 
     return success(res, { user });
   } catch (err) {
-    console.error('Token verification error:', err);
-    return error(res, 'VERIFICATION_FAILED', 'Token verification failed', 500);
-  }
-});
-
-// Get user profile
-app.get('/api/auth/profile', verifyToken, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        created_at: true,
-        respondent_profile: req.user.role === 'respondent',
-      }
-    });
-
-    if (!user) {
-      return error(res, 'USER_NOT_FOUND', 'User not found', 404);
-    }
-
-    return success(res, { user });
-  } catch (err) {
-    console.error('Profile fetch error:', err);
-    return error(res, 'PROFILE_FETCH_FAILED', 'Failed to fetch user profile', 500);
+    console.error('Verification error:', err);
+    return error(res, 'VERIFICATION_FAILED', 'Token verification failed', 401);
   }
 });
 

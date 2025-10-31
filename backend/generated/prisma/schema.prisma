@@ -9,19 +9,19 @@ datasource db {
 }
 
 model User {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  password_hash      String
-  role               String
-  
+  id            String @id @default(uuid())
+  email         String @unique
+  password_hash String
+  role          String @default("researcher")
+
   reset_token        String?   @unique
   reset_token_expiry DateTime?
-  
-  created_at         DateTime  @default(now())
-  updated_at         DateTime  @updatedAt
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   templates          Template[]
-  sessions           Session[] @relation("UserSessions")
+  sessions           Session[]   @relation("UserSessions")
   respondent_profile Respondent?
 
   @@index([email])
@@ -29,56 +29,56 @@ model User {
 }
 
 model Template {
-  id                String     @id @default(uuid())
+  id                String   @id @default(uuid())
   researcher_id     String
   title             String
   topic             String?
   starter_questions Json
-  created_at        DateTime   @default(now())
+  created_at        DateTime @default(now())
 
   researcher User      @relation(fields: [researcher_id], references: [id])
   sessions   Session[] @relation("TemplateSessions")
 }
 
 model Session {
-  id               String     @id @default(uuid())
+  id               String    @id @default(uuid())
   template_id      String
   respondent_id    String
   status           String
   transcript       Json?
   summary          String?
-  sentiment_score  Decimal?   @db.Decimal(3, 2)
+  sentiment_score  Decimal?  @db.Decimal(3, 2)
   key_themes       Json?
   started_at       DateTime?
   completed_at     DateTime?
   duration_seconds Int?
 
-  template   Template  @relation("TemplateSessions", fields: [template_id], references: [id])
-  respondent User      @relation("UserSessions", fields: [respondent_id], references: [id])
+  template   Template    @relation("TemplateSessions", fields: [template_id], references: [id])
+  respondent User        @relation("UserSessions", fields: [respondent_id], references: [id])
   incentives Incentive[]
 }
 
 model Respondent {
-  id                 String    @id @default(uuid())
-  user_id            String    @unique
-  name               String
-  demographics       Json?
-  participation_count Int       @default(0)
-  total_incentives   Decimal?  @default(0)
-  avg_sentiment      Decimal?  @db.Decimal(3, 2)
-  behavior_tags      Json?
+  id                  String   @id @default(uuid())
+  user_id             String   @unique
+  name                String
+  demographics        Json?
+  participation_count Int      @default(0)
+  total_incentives    Decimal? @default(0)
+  avg_sentiment       Decimal? @db.Decimal(3, 2)
+  behavior_tags       Json?
 
-  user         User       @relation(fields: [user_id], references: [id])
-  incentives   Incentive[]
+  user       User        @relation(fields: [user_id], references: [id])
+  incentives Incentive[]
 }
 
 model Incentive {
-  id             String    @id @default(uuid())
-  respondent_id  String
-  session_id     String
-  amount         Decimal
-  status         String
-  paid_at        DateTime?
+  id            String    @id @default(uuid())
+  respondent_id String
+  session_id    String
+  amount        Decimal
+  status        String
+  paid_at       DateTime?
 
   respondent Respondent @relation(fields: [respondent_id], references: [id])
   session    Session    @relation(fields: [session_id], references: [id])

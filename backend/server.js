@@ -9,6 +9,8 @@ import requestLogger from './logger.js';
 import dotenv from 'dotenv';
 import { validatePasswordEnhancedMiddleware, validatePassword, getPasswordStrength } from './passwordValidator.js';
 import fetch from 'node-fetch';
+import expressSession from "express-session";
+import passport from "./passport.js";
 
 dotenv.config();
 
@@ -30,6 +32,16 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+
+// Session and Passport Setup
+app.use(expressSession({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 // ============================================
 // EMAIL CONFIGURATION
@@ -218,6 +230,15 @@ app.get('/health', (req, res) => {
   success(res, { status: 'ok' });
 });
 
+app.use(expressSession({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+
 // ============================================
 // AUTH ROUTES - COMPLETE REPLACEMENT
 // ============================================
@@ -343,6 +364,100 @@ app.post('/api/auth/login', async (req, res) => {
     });
   }
 });
+
+// ============================================
+// AUTH VERIFICATION ROUTES
+// ============================================
+
+// Token verification endpoint
+app.get('/api/auth/verify', verifyToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      }
+    });
+
+    if (!user) {
+      return error(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    return success(res, { user });
+  } catch (err) {
+    console.error('Token verification error:', err);
+    return error(res, 'VERIFICATION_FAILED', 'Token verification failed', 500);
+  }
+});
+
+// Get user profile
+app.get('/api/auth/profile', verifyToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        created_at: true,
+        respondent_profile: req.user.role === 'respondent',
+      }
+    });
+
+    if (!user) {
+      return error(res, 'USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    return success(res, { user });
+  } catch (err) {
+    console.error('Profile fetch error:', err);
+    return error(res, 'PROFILE_FETCH_FAILED', 'Failed to fetch user profile', 500);
+  }
+});
+
+// ============================================
+// FIXED OAUTH ROUTES - Add to server.js
+// ============================================
+
+// Google OAuth
+app.get('/api/auth/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
+
+app.get('/api/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login?error=oauth_failed' }),
+  (req, res) => {
+    try {
+      // Generate JWT token
+      const token = generateToken(req.user);
+      
+      // Redirect to FRONTEND with token in URL
+      res.redirect(`http://localhost:3000/auth/callback?token=${token}`);
+    } catch (err) {
+      console.error('OAuth callback error:', err);
+      res.redirect('http://localhost:3000/login?error=token_generation_failed');
+    }
+  }
+);
+
+// LinkedIn OAuth
+app.get('/api/auth/linkedin', passport.authenticate('linkedin', { state: 'SOME STATE' }));
+
+app.get('/api/auth/linkedin/callback',
+  passport.authenticate('linkedin', { failureRedirect: 'http://localhost:3000/login?error=oauth_failed' }),
+  (req, res) => {
+    try {
+      // Generate JWT token
+      const token = generateToken(req.user);
+      
+      // Redirect to FRONTEND with token in URL
+      res.redirect(`http://localhost:3000/auth/callback?token=${token}`);
+    } catch (err) {
+      console.error('OAuth callback error:', err);
+      res.redirect('http://localhost:3000/login?error=token_generation_failed');
+    }
+  }
+);
 
 // Password validation endpoint
 app.post('/api/auth/validate-password', (req, res) => {

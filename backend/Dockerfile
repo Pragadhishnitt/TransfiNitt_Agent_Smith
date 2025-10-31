@@ -9,6 +9,7 @@ WORKDIR /app
 RUN apt-get update -y && \
     apt-get install -y openssl libssl3 ca-certificates && \
     rm -rf /var/lib/apt/lists/*
+RUN npm install passport passport-google-oauth20 passport-linkedin-oauth2 express-session
 
 # Copy dependency files first (for caching)
 COPY package*.json ./

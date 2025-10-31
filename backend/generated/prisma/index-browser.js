@@ -127,7 +127,10 @@ exports.Prisma.UserScalarFieldEnum = {
   email: 'email',
   password_hash: 'password_hash',
   role: 'role',
-  created_at: 'created_at'
+  reset_token: 'reset_token',
+  reset_token_expiry: 'reset_token_expiry',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
 };
 
 exports.Prisma.TemplateScalarFieldEnum = {
@@ -192,15 +195,15 @@ exports.Prisma.QueryMode = {
   insensitive: 'insensitive'
 };
 
+exports.Prisma.NullsOrder = {
+  first: 'first',
+  last: 'last'
+};
+
 exports.Prisma.JsonNullValueFilter = {
   DbNull: Prisma.DbNull,
   JsonNull: Prisma.JsonNull,
   AnyNull: Prisma.AnyNull
-};
-
-exports.Prisma.NullsOrder = {
-  first: 'first',
-  last: 'last'
 };
 
 

@@ -4,7 +4,7 @@
 
 -- CreateTable: User
 CREATE TABLE "User" (
-    "id" TEXT NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "email" TEXT NOT NULL,
     "password_hash" TEXT NOT NULL,
     "role" TEXT NOT NULL,
@@ -12,27 +12,25 @@ CREATE TABLE "User" (
     "reset_token_expiry" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable: Template
 CREATE TABLE "Template" (
-    "id" TEXT NOT NULL,
-    "researcher_id" TEXT NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "researcher_id" UUID NOT NULL,
     "title" TEXT NOT NULL,
     "topic" TEXT,
     "starter_questions" JSONB NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "Template_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable: Session
 CREATE TABLE "Session" (
-    "id" TEXT NOT NULL,
-    "template_id" TEXT NOT NULL,
-    "respondent_id" TEXT NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "template_id" UUID NOT NULL,
+    "respondent_id" UUID NOT NULL,
     "status" TEXT NOT NULL,
     "transcript" JSONB,
     "summary" TEXT,
@@ -41,35 +39,49 @@ CREATE TABLE "Session" (
     "started_at" TIMESTAMP(3),
     "completed_at" TIMESTAMP(3),
     "duration_seconds" INTEGER,
-
     CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable: Respondent
 CREATE TABLE "Respondent" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "user_id" UUID NOT NULL,
     "name" TEXT NOT NULL,
     "demographics" JSONB,
     "participation_count" INTEGER NOT NULL DEFAULT 0,
     "total_incentives" DECIMAL(65,30) DEFAULT 0,
     "avg_sentiment" DECIMAL(3,2),
     "behavior_tags" JSONB,
-
     CONSTRAINT "Respondent_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable: Incentive
 CREATE TABLE "Incentive" (
-    "id" TEXT NOT NULL,
-    "respondent_id" TEXT NOT NULL,
-    "session_id" TEXT NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "respondent_id" UUID NOT NULL,
+    "session_id" UUID NOT NULL,
     "amount" DECIMAL(65,30) NOT NULL,
     "status" TEXT NOT NULL,
     "paid_at" TIMESTAMP(3),
-
     CONSTRAINT "Incentive_pkey" PRIMARY KEY ("id")
 );
+
+-- ===========================
+-- OAUTH PROVIDERS TABLE
+-- ===========================
+CREATE TABLE auth_providers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+  provider VARCHAR(50) NOT NULL,
+  provider_id VARCHAR(255) NOT NULL,
+  access_token TEXT,
+  refresh_token TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT auth_providers_unique UNIQUE (provider, provider_id)
+);
+
+CREATE INDEX auth_providers_user_id_idx ON auth_providers(user_id);
+CREATE INDEX auth_providers_provider_idx ON auth_providers(provider);
 
 -- CreateIndexes
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

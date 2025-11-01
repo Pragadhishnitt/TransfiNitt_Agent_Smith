@@ -99,14 +99,20 @@ const ResetPassword = () => {
       });
 
       const data = await response.json();
-
+      
       if (data.success) {
         setSuccess(true);
         setTimeout(() => navigate('/login'), 3000);
       } else {
-        setError(data.error?.message || 'Failed to reset password');
+        // 👇 IMPROVED ERROR HANDLING
+        if (data.error?.details && Array.isArray(data.error.details)) {
+          setError(data.error.details.join(', '));
+        } else {
+          setError(data.error?.message || 'Failed to reset password');
+        }
       }
     } catch (err) {
+      console.error('Full error:', err);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);

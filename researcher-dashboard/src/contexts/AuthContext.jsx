@@ -136,26 +136,30 @@ export const AuthProvider = ({ children }) => {
       });
       
       const data = await response.json();
+      console.log('Validation response:', data); // 👈 Debug log
       
       if (data.success) {
         return {
           isValid: data.isValid,
           errors: data.errors || [],
-          strength: data.strength?.label || data.strength || 'unknown'
+          strength: {
+            score: data.strength?.score || 0,
+            label: data.strength?.label || 'Unknown'
+          }
         };
       }
       
       return { 
         isValid: false, 
         errors: ['Validation failed'], 
-        strength: 'unknown' 
+        strength: { score: 0, label: 'Unknown' }
       };
     } catch (error) {
       console.error('Password validation error:', error);
       return { 
         isValid: false, 
         errors: ['Server error'], 
-        strength: 'unknown' 
+        strength: { score: 0, label: 'Unknown' }
       };
     }
   };

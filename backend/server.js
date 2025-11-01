@@ -595,7 +595,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Reset password endpoint
-app.post('/api/auth/reset-password', validatePasswordEnhancedMiddleware, async (req, res) => {
+app.post('/api/auth/reset-password', async (req, res) => {
   try {
     const { token, new_password } = req.body;
 
@@ -605,6 +605,19 @@ app.post('/api/auth/reset-password', validatePasswordEnhancedMiddleware, async (
         error: {
           code: 'MISSING_FIELDS',
           message: 'Token and new password required'
+        }
+      });
+    }
+
+    // 👇 MANUALLY VALIDATE THE PASSWORD
+    const passwordValidation = validatePassword(new_password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_PASSWORD',
+          message: 'Password does not meet requirements',
+          details: passwordValidation.errors
         }
       });
     }

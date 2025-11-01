@@ -1,16 +1,9 @@
-// File: respondent-interview/vite.config.js
-
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react()],
   
-  // ⭐️ ADD THIS LINE: Tells Vite the source root is in 'src/'
-  root: 'src', 
-
   server: {
     port: 5174,
     host: true,
@@ -23,10 +16,8 @@ export default defineConfig({
     },
   },
 
-  // ⭐️ ADD THIS BLOCK: Corrects the output directory for the Docker build
   build: {
-    // Sets the output directory to '../dist' (one level up from 'src')
-    outDir: '../dist',
+    outDir: 'dist',
     emptyOutDir: true,
   }
 })

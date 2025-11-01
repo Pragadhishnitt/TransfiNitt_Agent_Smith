@@ -12,7 +12,6 @@ RUN npm ci
 COPY . .
 
 # Build with cache busting
-ARG CACHEBUST=1
 RUN npm run build
 
 # Production stage

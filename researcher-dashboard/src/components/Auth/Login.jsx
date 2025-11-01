@@ -103,6 +103,7 @@ const Login = () => {
                     placeholder="Enter your email"
                   />
                 </div>
+                </div>
               </div>
               
               <div>
@@ -131,6 +132,13 @@ const Login = () => {
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
+                <div className="flex items-center justify-end">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Forgot password?
+                </Link>
               </div>
             </div>
 

@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import Layout from './components/Layout/Layout';
-import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import AuthCallback from './components/Auth/AuthCallback';
@@ -15,21 +14,21 @@ import Insights from './pages/Insights';
 import SurveyGenerator from './pages/SurveyGenerator';
 import Incentives from './pages/Incentives';
 import Sample from './pages/sample';
+import ForgotPassword from './components/Auth/ForgotPassword';
+import ResetPassword from './components/Auth/ResetPassword';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(() => {
-    return localStorage.getItem('darkMode') === 'false' || 
-           window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return (
+      localStorage.getItem('darkMode') === 'false' ||
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
   });
 
   useEffect(() => {
     localStorage.setItem('darkMode', isDark);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDark);
   }, [isDark]);
 
   if (loading) {
@@ -40,15 +39,6 @@ function AppContent() {
     );
   }
 
-  const handleAuthCallback = () => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    if (token) {
-      localStorage.setItem('authToken', token);
-      window.location.href = '/dashboard';
-    }
-  };
-
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 dark:bg-boxdark">
@@ -57,6 +47,8 @@ function AppContent() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         ) : (

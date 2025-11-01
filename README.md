@@ -95,7 +95,7 @@ TransfiNitt_Agent_Smith/
 
 3. **Start all services with Docker Compose**:
    ```bash
-   docker-compose up
+   docker compose up
    ```
 
    This single command will start all services:
@@ -115,25 +115,25 @@ TransfiNitt_Agent_Smith/
 
 ```bash
 # Start all services
-docker-compose up
+docker compose up
 
 # Start in background (detached mode)
-docker-compose up -d
+docker compose up -d
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # View logs
-docker-compose logs
+docker compose logs
 
 # View logs for specific service
-docker-compose logs backend
+docker compose logs backend
 
 # Rebuild and start services
-docker-compose up --build
+docker compose up --build
 
 # Stop and remove volumes
-docker-compose down -v
+docker compose down -v
 ```
 
 ## 🔄 **Workflow**
